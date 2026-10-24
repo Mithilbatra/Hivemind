@@ -1,0 +1,15 @@
+node_modules
+.next
+__pycache__
+*.pyc
+.venv
+.env
+*.db
+.pytest_cache
+.ruff_cache
+data/
+worktrees/
+samples/repos/
+tsconfig.tsbuildinfo
+*.egg-info/
+Icon?

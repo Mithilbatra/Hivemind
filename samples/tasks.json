@@ -1,0 +1,24 @@
+[
+  {
+    "name": "feature (low risk, runs straight to review)",
+    "title": "Add a farewell function",
+    "description": "Add farewell(name) to greeter.py that returns 'Goodbye, <name>!' and cover it with a test.",
+    "acceptance_criteria": "farewell('Ada') == 'Goodbye, Ada!'; existing tests still pass.",
+    "priority": "normal",
+    "risk_level": "low"
+  },
+  {
+    "name": "bugfix",
+    "title": "Fix greeting when name is empty",
+    "description": "greet('') returns 'Hello, !'. It should return 'Hello, stranger!'.",
+    "priority": "high",
+    "risk_level": "low"
+  },
+  {
+    "name": "risky task (blocks until a human approves it to run)",
+    "title": "Migrate production configuration",
+    "description": "Rewrite deployment config and rotate credentials.",
+    "priority": "urgent",
+    "risk_level": "high"
+  }
+]

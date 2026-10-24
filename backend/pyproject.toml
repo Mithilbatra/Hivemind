@@ -1,0 +1,34 @@
+[project]
+name = "orchestrator"
+version = "0.1.0"
+description = "Task orchestration layer for coding agents"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "sqlalchemy>=2.0",
+  "alembic>=1.13",
+  "psycopg[binary]>=3.2",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "redis>=5.0",
+  "rq>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27", "fakeredis>=2.23", "ruff>=0.5"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501", "E701", "E702"]

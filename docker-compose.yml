@@ -1,0 +1,60 @@
+# Everything needed to run locally: `make up` (or `docker compose up --build`).
+x-backend: &backend
+  build: ./backend
+  env_file: .env
+  user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  volumes:
+    - ${REPOS_DIR:-./samples/repos}:/repos
+    - orch-data:/data
+  depends_on:
+    db: { condition: service_healthy }
+    redis: { condition: service_healthy }
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: orchestrator
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orchestrator}
+      POSTGRES_DB: orchestrator
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orchestrator"]
+      interval: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      retries: 20
+
+  api:
+    <<: *backend
+    ports: ["127.0.0.1:${API_PORT:-8000}:8000"]  # localhost only: this API can run code in your repos
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/api/health/ready')"]
+      interval: 5s
+      retries: 30
+
+  worker:
+    <<: *backend
+    command: ["sh", "-c", "rq worker-pool orchestrator -n ${WORKER_CONCURRENCY:-4} -u $${REDIS_URL}"]
+    depends_on:
+      api: { condition: service_healthy }
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        API_INTERNAL_URL: http://api:8000
+    ports: ["127.0.0.1:${WEB_PORT:-47213}:3000"]
+    depends_on: [api]
+
+volumes:
+  pgdata:
+  redisdata:
+  orch-data:
