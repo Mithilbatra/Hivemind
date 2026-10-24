@@ -139,3 +139,14 @@ def test_health_endpoints(client):
     assert client.get("/api/health/ready").json() == {"status": "ready"}
     w = client.get("/api/health/workers").json()
     assert w["queued"] == 0 and w["workers"] == []
+
+
+def test_admin_password_follows_env_on_restart(env, monkeypatch):
+    from app.config import get_settings
+    from app.main import bootstrap
+    monkeypatch.setenv("ADMIN_PASSWORD", "new-pw")
+    get_settings.cache_clear()
+    bootstrap()
+    with TestClient(create_app()) as c:
+        assert c.post("/api/auth/login", json={"username": "admin", "password": "pw"}).status_code == 401
+        assert c.post("/api/auth/login", json={"username": "admin", "password": "new-pw"}).status_code == 200
