@@ -77,7 +77,7 @@ def decide(db, task: Task, action: str, user: str, reason: str = "", confirm: bo
 
 
 def _finish(db, task, bw, actor):
-    repo_state.commit(db, task, bw, f"{task.title}\n\nTask #{task.id} (orchestrator branch {bw.branch})")
+    repo_state.commit(db, task, bw, f"{task.title}\n\nTask #{task.id} (Hivemind branch {bw.branch})")
     repo_state.release_worktree(db, bw, db.get(Repository, task.repo_id), delete_branch=False)
     task.error = None
     transition(db, task, states.COMPLETED, "committed after approval", actor)

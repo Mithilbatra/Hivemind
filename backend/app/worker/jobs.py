@@ -7,7 +7,7 @@ from ..services import orchestrator
 from ..services.audit import emit
 from . import queue
 
-log = logging.getLogger("orchestrator.jobs")
+log = logging.getLogger("hivemind.jobs")
 
 
 def run_task_job(task_id: int) -> None:

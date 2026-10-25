@@ -6,7 +6,7 @@ if [ -d "$dir/.git" ]; then echo "demo repo already exists: $dir"; exit 0; fi
 mkdir -p "$dir/tests" && cd "$dir"
 cat > README.md <<'R'
 # demo-app
-Tiny Python library used to try the orchestrator.
+Tiny Python library used to try Hivemind.
 R
 cat > greeter.py <<'R'
 def greet(name: str) -> str:

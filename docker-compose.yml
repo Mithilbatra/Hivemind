@@ -1,4 +1,4 @@
-# Everything needed to run locally: `make up` (or `docker compose up --build`).
+# Hivemind: everything needed to run locally: `make up` (or `docker compose up --build`).
 x-backend: &backend
   build: ./backend
   env_file: .env
@@ -42,7 +42,7 @@ services:
 
   worker:
     <<: *backend
-    command: ["sh", "-c", "rq worker-pool orchestrator -n ${WORKER_CONCURRENCY:-4} -u $${REDIS_URL}"]
+    command: ["sh", "-c", "rq worker-pool hivemind -n ${WORKER_CONCURRENCY:-4} -u $${REDIS_URL}"]
     depends_on:
       api: { condition: service_healthy }
 

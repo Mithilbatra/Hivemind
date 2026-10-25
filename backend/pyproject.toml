@@ -1,7 +1,7 @@
 [project]
-name = "orchestrator"
+name = "hivemind"
 version = "0.1.0"
-description = "Task orchestration layer for coding agents"
+description = "Hivemind: many coding agents, one shared mind"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",

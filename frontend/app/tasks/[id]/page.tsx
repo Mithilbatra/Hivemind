@@ -37,7 +37,7 @@ export default function TaskPage() {
 
   return (
     <>
-      <p className="small"><Link href="/tasks">← Tasks</Link> · <Link href="/">Agent hub</Link></p>
+      <p className="small"><Link href="/tasks">← Tasks</Link> · <Link href="/">Hive</Link></p>
       <div className="row" style={{ marginBottom: 6 }}>
         <h1 style={{ margin: 0, fontSize: 20 }}>#{t.id} {t.title}</h1>
         <StatusBadge status={t.status} /><RiskBadge score={t.risk_score} />

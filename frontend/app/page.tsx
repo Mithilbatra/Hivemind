@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import HiveMap from "@/components/HiveMap";
 import TaskForm from "@/components/TaskForm";
 import { StatusBadge } from "@/components/ui";
 import { Hub, HubAgent, HubEvent, HubSession, HubTask, Project, Repo, api } from "@/lib/api";
@@ -52,7 +53,7 @@ function AgentCard({ a, now }: { a: HubAgent; now: number }) {
   const failed = (a.stats.failed ?? 0) + (a.stats.timeout ?? 0) + (a.stats.abandoned ?? 0);
   const last = a.recent[0];
   return (
-    <div className={`agent${busy ? " busy" : ""}`} style={roleVar(a.role)}>
+    <div id={`agent-${a.role}`} className={`agent${busy ? " busy" : ""}`} style={roleVar(a.role)}>
       <h3>
         <span className={`dot${busy ? " on" : ""}`} aria-hidden />
         {a.role}
@@ -110,7 +111,7 @@ function ProjectBoard({ p, repos, projects, onCreated }: {
       {p.description && <p className="small" style={{ margin: "6px 0 10px", whiteSpace: "pre-wrap" }}><b>Goal:</b> {p.description}</p>}
       {adding && <TaskForm repos={repos} projects={projects} projectId={p.id} onCreated={() => { setAdding(false); onCreated(); }} />}
       {p.tasks.length === 0
-        ? <p className="muted small" style={{ marginTop: 10 }}>No tasks yet. Add one and the agents will pick it up.</p>
+        ? <p className="muted small" style={{ marginTop: 10 }}>No tasks yet. Add one and the hive picks it up.</p>
         : (
           <div className="board" style={{ marginTop: 10 }}>
             {COLUMNS.map((c) => {
@@ -164,7 +165,7 @@ function NewProject({ onDone }: { onDone: () => void }) {
   return (
     <form className="card" onSubmit={submit}>
       <h2>New project</h2>
-      <p className="small muted" style={{ marginTop: 0 }}>A project is one big goal. Split it into tasks; every agent working on a task sees the goal and what the other agents are editing.</p>
+      <p className="small muted" style={{ marginTop: 0 }}>A project is one big goal for the hive. Split it into tasks; every agent working on a task sees the goal and what the other agents are editing.</p>
       <div className="field"><label>Name</label><input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Booking app" /></div>
       <div className="field"><label>Goal</label><textarea rows={3} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="A booking app with accounts, a calendar view and payments; all tests pass." /></div>
       {err && <div className="banner bad">{err}</div>}
@@ -173,7 +174,7 @@ function NewProject({ onDone }: { onDone: () => void }) {
   );
 }
 
-export default function AgentHub() {
+export default function Hive() {
   const now = useNow();
   const [creating, setCreating] = useState(false);
   const { data: hub, error, reload } = usePoll(() => api<Hub>("/hub"), 2000);
@@ -185,32 +186,36 @@ export default function AgentHub() {
   const tasks = hub.projects.flatMap((p) => p.tasks);
   const inFlight = tasks.filter((t) => ["queued", "planning", "assigned", "running", "validation"].includes(t.status)).length;
   const needsYou = tasks.filter((t) => t.status === "blocked" || t.status === "waiting_for_review").length;
-  const workers = hub.workers?.workers.length;
+  const done = tasks.filter((t) => t.status === "completed").length;
 
   return (
     <>
-      <div className="row" style={{ marginBottom: 14 }}>
-        <h1 style={{ margin: 0, fontSize: 20 }}>Agent hub</h1>
-        <span className="muted small">live · refreshes every 2 s</span>
-        <span style={{ flex: 1 }} />
-        <button onClick={() => setCreating(!creating)}>{creating ? "Close" : "+ New project"}</button>
-      </div>
+      <section className="hero comb">
+        <HiveMap agents={hub.agents} needsYou={needsYou} />
+        <div>
+          <h1>The Hive</h1>
+          <p className="tag">Many agents, one mind. Live, refreshed every 2 s.</p>
+          <div className="hstats">
+            <div><b>{inFlight}</b><span className="small muted">tasks in flight</span></div>
+            <div><b style={{ color: needsYou ? "var(--accent)" : undefined }}>{needsYou}</b><span className="small muted">waiting for you</span></div>
+            <div><b>{done}</b><span className="small muted">tasks done</span></div>
+            <div><b>{hub.workers?.workers.length ?? "–"}</b><span className="small muted">{hub.workers ? `workers · ${hub.workers.queued} queued` : "queue unavailable"}</span></div>
+          </div>
+          <button className="primary" onClick={() => setCreating(!creating)}>{creating ? "Close" : "+ New project"}</button>
+        </div>
+      </section>
       {creating && <NewProject onDone={() => { setCreating(false); reload(); reloadProjects(); }} />}
-      <div className="stats">
-        <div className="stat"><b>{hub.active.length}</b><span className="small muted">agents working now</span></div>
-        <div className="stat"><b>{inFlight}</b><span className="small muted">tasks in flight</span></div>
-        <div className="stat"><b style={{ color: needsYou ? "var(--warn)" : undefined }}>{needsYou}</b><span className="small muted">waiting for you</span></div>
-        <div className="stat"><b>{workers ?? "–"}</b><span className="small muted">{hub.workers ? `workers · ${hub.workers.queued} queued` : "queue unavailable"}</span></div>
-      </div>
       <div className="hub">
         <div>
+          <h2 className="section-title">Agents</h2>
           <div className="agents">{hub.agents.map((a) => <AgentCard key={a.role} a={a} now={now} />)}</div>
+          <h2 className="section-title" id="boards">Projects</h2>
           {hub.projects.map((p) => (
             <ProjectBoard key={p.id} p={p} repos={repos ?? []} projects={projects ?? []} onCreated={() => { reload(); reloadRepos(); }} />
           ))}
         </div>
         <aside className="card">
-          <h2>Activity</h2>
+          <h2>Hive activity</h2>
           <Feed events={hub.events} />
         </aside>
       </div>

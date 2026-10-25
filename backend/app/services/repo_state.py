@@ -22,7 +22,7 @@ class GitError(RuntimeError):
 @cache
 def _excludes(data_dir: Path) -> str:
     """Written once per process, atomically: other workers may be running git against it."""
-    f = data_dir / "orchestrator.gitignore"
+    f = data_dir / "hivemind.gitignore"
     f.parent.mkdir(parents=True, exist_ok=True)
     tmp = f.with_suffix(f".{os.getpid()}.tmp")
     tmp.write_text("\n".join(JUNK) + "\n")
@@ -59,7 +59,7 @@ def create_worktree(db, task, repo) -> BranchWorktree:
     base_sha = resolve_ref(repo.path, base_ref)
     if base_sha is None:  # never fall back to whatever is checked out: the diff would be against the wrong base
         raise GitError(f"base branch '{base_ref}' not found in {repo.path}")
-    branch = f"orch/task-{task.id}"
+    branch = f"hivemind/task-{task.id}"
     path = (get_settings().worktrees_dir / f"task-{task.id}").resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():

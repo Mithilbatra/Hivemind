@@ -5,7 +5,7 @@ Run `make up`, open http://localhost:47213 (admin / the password in `.env`), the
 ## 1. Feature, happy path with a retry (task 0)
 1. Submit "Add a farewell function". The planner produces inspect → design → implement → test → review.
 2. With `AGENT_MODE=mock` and `MOCK_FAIL_FIRST=true` the writer's first attempt fails validation. Open the **Validation** tab: attempt 1 failed, a debug prompt was sent, attempt 2 passed. The **Timeline** shows the `retry` event with the reason.
-3. The task stops at *waiting for review*. Inspect the **Diff**, then **Approve & commit**. The change lands as a commit on branch `orch/task-<id>` inside `samples/repos/demo-app`; the main checkout is never touched.
+3. The task stops at *waiting for review*. Inspect the **Diff**, then **Approve & commit**. The change lands as a commit on branch `hivemind/task-<id>` inside `samples/repos/demo-app`; the main checkout is never touched.
 
 ## 2. Risk gate (task 2)
 `risk_level: high` blocks the task before any code agent runs. Approve it in the approval panel to let it proceed; Reject cancels it and deletes its branch.

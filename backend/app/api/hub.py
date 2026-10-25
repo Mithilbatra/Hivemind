@@ -1,4 +1,4 @@
-"""Agent hub: one read-only snapshot of which agent works on what, per project, plus the live event feed."""
+"""The Hive: one read-only snapshot of which agent works on what, per project, plus the live event feed."""
 import json
 from collections import defaultdict
 

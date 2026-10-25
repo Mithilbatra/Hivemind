@@ -52,10 +52,10 @@ def test_full_run_to_review_then_approve(db, repo):
 
     review.decide(db, t, "approve", "mithil")
     assert t.status == states.COMPLETED
-    log = subprocess.run(["git", "log", "--format=%an|%s", f"orch/task-{t.id}", "-1"], cwd=repo.path, capture_output=True,
+    log = subprocess.run(["git", "log", "--format=%an|%s", f"hivemind/task-{t.id}", "-1"], cwd=repo.path, capture_output=True,
                          text=True, check=True).stdout.strip()
-    assert log == "Orchestrator|Add feature"
-    shown = subprocess.run(["git", "show", f"orch/task-{t.id}:mock_feature.py"], cwd=repo.path, capture_output=True, text=True)
+    assert log == "Hivemind|Add feature"
+    shown = subprocess.run(["git", "show", f"hivemind/task-{t.id}:mock_feature.py"], cwd=repo.path, capture_output=True, text=True)
     assert "VALUE = 1" in shown.stdout
     assert not Path(get_settings().worktrees_dir / f"task-{t.id}").exists()
     assert not (Path(repo.path) / "mock_feature.py").exists()
@@ -131,7 +131,7 @@ def test_reject_cancels_and_removes_branch(db, repo):
     t = submit(db, repo)
     review.decide(db, t, "reject", "me", reason="nope")
     assert t.status == states.CANCELLED
-    branches = subprocess.run(["git", "branch", "--list", "orch/*"], cwd=repo.path, capture_output=True, text=True).stdout
+    branches = subprocess.run(["git", "branch", "--list", "hivemind/*"], cwd=repo.path, capture_output=True, text=True).stdout
     assert branches.strip() == ""
 
 

@@ -37,12 +37,12 @@ async def lifespan(app):
 
 def create_app() -> FastAPI:
     logging_setup.setup()
-    app = FastAPI(title="Code Orchestrator", lifespan=lifespan)
+    app = FastAPI(title="Hivemind", lifespan=lifespan)
     app.include_router(admin.public, prefix="/api")
     app.include_router(admin.router, prefix="/api")
     app.include_router(tasks.router, prefix="/api")
     app.include_router(hub.router, prefix="/api")
-    logging.getLogger("orchestrator").info("started")
+    logging.getLogger("hivemind").info("started")
     return app
 
 

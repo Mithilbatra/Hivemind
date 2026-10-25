@@ -36,7 +36,7 @@ def test_create_list_detail(client):
     assert client.get("/api/tasks", params={"status": "failed"}).json() == []
     assert len(client.get("/api/tasks", params={"q": "oauth"}).json()) == 1
     d = client.get(f"/api/tasks/{t['id']}").json()
-    assert d["repo_name"] == "app" and len(d["children"]) == 5 and d["worktree"]["branch"] == f"orch/task-{t['id']}"
+    assert d["repo_name"] == "app" and len(d["children"]) == 5 and d["worktree"]["branch"] == f"hivemind/task-{t['id']}"
     by_title = {c["title"]: c for c in d["children"]}
     assert by_title["Write tests"]["depends_on"] == [by_title["Implement change"]["id"]]
     assert d["approvals"][0]["kind"] == "pre_commit" and d["sessions"]

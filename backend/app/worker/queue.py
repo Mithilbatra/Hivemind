@@ -7,7 +7,7 @@ from rq import Queue, Retry
 
 from ..config import get_settings
 
-QUEUE_NAME = "orchestrator"
+QUEUE_NAME = "hivemind"
 # Short TTL kept alive by a heartbeat: a worker that dies frees its task within a minute.
 LOCK_TTL_S = 60
 JOB_TIMEOUT_S = 12 * 3600  # sessions, checks and git calls have their own, shorter timeouts
@@ -37,7 +37,7 @@ def get_queue() -> Queue:
 
 
 def lock_key(task_id: int) -> str:
-    return f"orch:lock:{task_id}"
+    return f"hivemind:lock:{task_id}"
 
 
 @contextmanager

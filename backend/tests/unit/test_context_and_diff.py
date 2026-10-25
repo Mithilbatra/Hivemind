@@ -33,7 +33,7 @@ def test_diff_capture_and_snapshot(db, repo):
     from pathlib import Path
     t = create_tasks(db, title="x", repo_ids=[repo.id])[0]
     bw = repo_state.create_worktree(db, t, repo)
-    assert Path(bw.path).is_dir() and bw.branch == f"orch/task-{t.id}"
+    assert Path(bw.path).is_dir() and bw.branch == f"hivemind/task-{t.id}"
     before = repo_state.snapshot(bw.path)
     (Path(bw.path) / "src/app.py").write_text("def hello():\n    return 'changed'\n")
     (Path(bw.path) / "new.py").write_text("a = 1\nb = 2\n")

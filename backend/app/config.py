@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     max_log_chars: int = 200_000  # per session kept in DB; full log stays on disk
     max_diff_chars: int = 500_000
 
-    git_author_name: str = "Orchestrator"
-    git_author_email: str = "orchestrator@localhost"
+    git_author_name: str = "Hivemind"
+    git_author_email: str = "hivemind@localhost"
 
     @property
     def repo_roots(self) -> list[Path]:
@@ -56,6 +56,6 @@ def get_settings() -> Settings:
     if s.secret_key in PLACEHOLDER_SECRETS:
         # A published key lets anyone forge a login token. A random one only costs a re-login after restarts.
         # shortcut: per-process key, so it breaks if the API ever runs as several processes; set SECRET_KEY then.
-        logging.getLogger("orchestrator").warning("SECRET_KEY is unset or a placeholder; using a random key")
+        logging.getLogger("hivemind").warning("SECRET_KEY is unset or a placeholder; using a random key")
         s.secret_key = secrets.token_hex(32)
     return s

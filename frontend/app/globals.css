@@ -1,24 +1,30 @@
+/* Hivemind palette: warm neutrals + honey. --accent is for text/links (passes contrast), --honey for fills. */
 :root {
-  --bg: #f6f7f9; --card: #fff; --fg: #1b1f24; --muted: #667085; --line: #e3e6eb; --accent: #3355ff;
+  --bg: #faf8f3; --card: #fff; --fg: #1c1917; --muted: #6b6459; --line: #e9e3d6; --accent: #b45309;
+  --honey: #f59e0b; --honey-soft: #fef3c7; --on-honey: #2a1a03;
   --ok: #16794c; --ok-bg: #dcf5e8; --bad: #b42318; --bad-bg: #fde4e1; --warn: #93560a; --warn-bg: #fdf0d5;
-  --info: #1d4ed8; --info-bg: #e0eaff; --gray-bg: #eceff3; --add: #e6f7ec; --del: #fdecea; --code: #f1f3f6;
+  --info: #1d4ed8; --info-bg: #e0eaff; --gray-bg: #f1ece2; --add: #e6f7ec; --del: #fdecea; --code: #f5f1e8;
   /* one hue per agent role */
-  --r-planner: #7c3aed; --r-researcher: #0f766e; --r-writer: #2563eb; --r-tester: #b45309; --r-reviewer: #be185d;
+  --r-planner: #7c3aed; --r-researcher: #0f766e; --r-writer: #2563eb; --r-tester: #15803d; --r-reviewer: #be185d;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1216; --card: #171b21; --fg: #e8ebf0; --muted: #98a2b3; --line: #2a303a; --accent: #7b93ff;
+    --bg: #0f0d0a; --card: #19160f; --fg: #f2ede4; --muted: #a8a092; --line: #2e2922; --accent: #fbbf24;
+    --honey: #f5a524; --honey-soft: #3a2a0b; --on-honey: #1a1206;
     --ok: #5fd39a; --ok-bg: #13362a; --bad: #ff8d83; --bad-bg: #3d1a17; --warn: #f2b863; --warn-bg: #3a2a0d;
-    --info: #8fb0ff; --info-bg: #172447; --gray-bg: #232933; --add: #12301f; --del: #3a1a18; --code: #1d222a;
-    --r-planner: #b39dfa; --r-researcher: #5eead4; --r-writer: #93b4ff; --r-tester: #fbbf6b; --r-reviewer: #f9a8d4;
+    --info: #8fb0ff; --info-bg: #172447; --gray-bg: #26211a; --add: #12301f; --del: #3a1a18; --code: #211d16;
+    --r-planner: #b39dfa; --r-researcher: #5eead4; --r-writer: #93b4ff; --r-tester: #86efac; --r-reviewer: #f9a8d4;
   }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
-header.top { display: flex; gap: 20px; align-items: center; padding: 10px 24px; background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
-header.top .brand { font-weight: 700; color: var(--fg); }
+header.top { display: flex; gap: 20px; align-items: center; padding: 10px 24px; background: var(--card); border-bottom: 2px solid var(--honey); position: sticky; top: 0; z-index: 5; }
+header.top .brand { color: var(--fg); }
+header.top .brand:hover { text-decoration: none; }
+.wordmark { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; letter-spacing: -.01em; }
+.wordmark b { color: var(--accent); font-weight: 800; }
 header.top .sp { flex: 1; }
 header.top a.on { color: var(--fg); font-weight: 600; }
 main { max-width: 1360px; margin: 0 auto; padding: 20px 24px 60px; }
@@ -41,7 +47,9 @@ label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; c
 button { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 7px 14px; cursor: pointer; }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: .5; cursor: not-allowed; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary { background: var(--honey); border-color: var(--honey); color: var(--on-honey); font-weight: 600; }
+button.primary:hover:not(:disabled) { border-color: var(--accent); filter: brightness(1.05); }
+:focus-visible { outline: 2px solid var(--honey); outline-offset: 2px; }
 button.danger { color: var(--bad); border-color: var(--bad); }
 .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--gray-bg); white-space: nowrap; }
 .badge.ok { background: var(--ok-bg); color: var(--ok); } .badge.bad { background: var(--bad-bg); color: var(--bad); }
@@ -67,17 +75,37 @@ button.danger { color: var(--bad); border-color: var(--bad); }
 .dag .step { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
 @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } header.top { padding: 10px 16px; flex-wrap: wrap; gap: 8px 14px; } header.top .qstat { display: none; } main { padding: 14px 16px; } }
 
-/* ---- agent hub ---- */
+/* ---- the hive (home page) ---- */
 .hub { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
 .hub aside { position: sticky; top: 64px; max-height: calc(100vh - 80px); overflow: auto; }
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
-.stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
-.stat b { display: block; font-size: 22px; line-height: 1.2; }
+/* honeycomb texture: the classic 56x100 hex tile; data URIs can't read CSS vars, so one tint per theme */
+.comb { background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill='none' stroke='%23b45309' stroke-opacity='.08'/%3E%3Cpath d='M28 0L28 34L0 50L0 84L28 100L56 84L56 50L28 34' fill='none' stroke='%23b45309' stroke-opacity='.08'/%3E%3C/svg%3E"); }
+@media (prefers-color-scheme: dark) {
+  .comb { background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill='none' stroke='%23fbbf24' stroke-opacity='.07'/%3E%3Cpath d='M28 0L28 34L0 50L0 84L28 100L56 84L56 50L28 34' fill='none' stroke='%23fbbf24' stroke-opacity='.07'/%3E%3C/svg%3E"); }
+}
+.hero { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 28px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 18px 24px; margin-bottom: 16px; }
+.hero h1 { margin: 0; font-size: 26px; letter-spacing: -.02em; }
+.hero .tag { color: var(--muted); margin: 2px 0 14px; }
+.hstats { display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: 10px 24px; margin-bottom: 14px; max-width: 420px; }
+.hstats b { display: block; font-size: 22px; line-height: 1.2; }
+.hivemap { width: 100%; max-width: 300px; height: auto; display: block; }
+.hivemap .cell { transition: fill-opacity .3s; }
+.hivemap a:hover .cell, .hivemap a:focus .cell { stroke-width: 3.5; }
+.hivemap .live { animation: glow 1.8s ease-in-out infinite; }
+@keyframes glow { 50% { stroke-opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .hivemap .live { animation: none; } }
+.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+main.login { max-width: none; min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+.login form { width: 100%; max-width: 360px; }
+.login .brandblock { text-align: center; margin-bottom: 18px; }
+.login .brandblock h1 { margin: 10px 0 2px; font-size: 26px; letter-spacing: -.02em; }
+.login .brandblock h1 b { color: var(--accent); }
 .agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .agent { background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--role); border-radius: 10px; padding: 12px 14px; }
 .agent.busy { box-shadow: 0 0 0 1px var(--role) inset; }
 .agent h3 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; text-transform: capitalize; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex-shrink: 0; }
+/* hexagon status marker, shared by agent cards */
+.dot { width: 11px; height: 12px; background: var(--line); flex-shrink: 0; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
 .dot.on { background: var(--role); animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .dot.on { animation: none; } }
@@ -98,6 +126,7 @@ button.danger { color: var(--bad); border-color: var(--bad); }
   .hub { grid-template-columns: 1fr; }
   .hub aside { position: static; max-height: none; }
   .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stats { grid-template-columns: repeat(2, 1fr); }
+  .hero { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .hero .hstats { margin-left: auto; margin-right: auto; }
 }
 @media (max-width: 560px) { .board { grid-template-columns: 1fr; } }

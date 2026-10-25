@@ -64,7 +64,7 @@ export type AgentDef = { role: string; description: string; constraints: string[
 export type LogLine = { session_id: number; seq: number; stream: string; text: string };
 export type Logs = { sessions: { id: number; role: string; status: string; task_id: number }[]; next_offset: number; lines: LogLine[] };
 
-const TOKEN = "orch_token";
+const TOKEN = "hivemind_token";
 export const token = () => (typeof window === "undefined" ? "" : localStorage.getItem(TOKEN) || "");
 export const setToken = (t: string | null) => (t ? localStorage.setItem(TOKEN, t) : localStorage.removeItem(TOKEN));
 

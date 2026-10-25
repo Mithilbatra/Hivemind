@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Wordmark } from "@/components/Logo";
 import { api, setToken, token } from "@/lib/api";
 import { usePoll } from "@/lib/hooks";
 
@@ -17,13 +18,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     else setReady(true);
   }, [login, router, path]);
   const { data: w } = usePoll(() => api<Workers>("/health/workers"), login ? 0 : 10000, [login]);
-  if (login) return <main>{children}</main>;
+  if (login) return <main className="login comb">{children}</main>;
   if (!ready) return null;
   return (
     <>
       <header className="top">
-        <Link href="/" className="brand">Code Orchestrator</Link>
-        {([["/", "Agent hub"], ["/tasks", "Tasks"], ["/settings", "Settings"]] as const).map(([href, label]) => {
+        <Link href="/" className="brand" aria-label="Hivemind home"><Wordmark /></Link>
+        {([["/", "Hive"], ["/tasks", "Tasks"], ["/settings", "Settings"]] as const).map(([href, label]) => {
           const on = href === "/" ? path === "/" : path.startsWith(href);
           return <Link key={href} href={href} className={on ? "on" : ""} aria-current={on ? "page" : undefined}>{label}</Link>;
         })}

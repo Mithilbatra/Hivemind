@@ -1,4 +1,4 @@
-# Architecture
+# Hivemind architecture
 
 ```
  Browser ──► web (Next.js) ──/api proxy──► api (FastAPI) ──► Postgres
@@ -27,7 +27,7 @@
 | `services/review.py` | Approve / reject / request changes / force commit |
 | `services/safety.py` | Command allowlist, repo-root restriction, secret-free child env |
 | `worker/` | RQ queue, per-task Redis lock (60 s TTL + heartbeat, shared with API actions), dead-letter after the last retry |
-| `api/hub.py` | Agent hub snapshot: running sessions per role, project boards, event feed |
+| `api/hub.py` | Hive snapshot: running sessions per role, project boards, event feed |
 | `api/` | REST endpoints; `auth.py` scrypt + HMAC-signed tokens |
 
 ## Data model
@@ -49,7 +49,7 @@ Subtasks use `queued → assigned → running → completed | failed | cancelled
 
 * Repo access fails closed: `ALLOWED_REPO_ROOTS` (empty = nothing), optional per-project roots, symlinks resolved.
 * Commands: `shlex` → argv, `shell=False`, executable allowlist, denied tokens (`rm`, `push`, `--force`, `curl`, inline `-c`/`-e`), read-only git only. Blocked commands are recorded as failed checks.
-* Agents run in a git worktree, never in the user's checkout, with the orchestrator's secrets removed from their environment, and with per-role tool policies plus a post-session file-policy check.
+* Agents run in a git worktree, never in the user's checkout, with Hivemind's own secrets removed from their environment, and with per-role tool policies plus a post-session file-policy check.
 * Nothing is committed without a `pre_commit` approval; high-risk tasks also need a `pre_run` approval. Validation failure fails the task closed.
 * Every command, decision and policy event is in the audit log.
 

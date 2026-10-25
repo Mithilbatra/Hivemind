@@ -1,7 +1,10 @@
 import "./globals.css";
 import Shell from "@/components/Shell";
 
-export const metadata = { title: "Code Orchestrator", description: "Plan, run, validate and review AI coding tasks" };
+export const metadata = {
+  title: "Hivemind",
+  description: "Many coding agents, one shared mind: plan, run, validate and review AI coding work.",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -1,6 +1,8 @@
-# Code Orchestrator
+# Hivemind
 
-A self-hosted orchestration layer around a coding-agent CLI. Submit a task in plain language; the system plans it as a DAG of subtasks, gathers repo context, runs isolated agent sessions in git worktrees, validates with your tests/lint/typecheck/build, retries on failure, gates risky work behind human approval, and keeps a full audit trail.
+<p><img src="frontend/app/icon.svg" width="64" alt="Hivemind logo: a honeycomb cell holding a small network"></p>
+
+**Many agents, one mind.** Hivemind is a self-hosted hive for coding agents, built around a coding-agent CLI. Submit a task in plain language; the system plans it as a DAG of subtasks, gathers repo context, runs isolated agent sessions in git worktrees, validates with your tests/lint/typecheck/build, retries on failure, gates risky work behind human approval, and keeps a full audit trail.
 
 * Backend: Python 3.12, FastAPI, SQLAlchemy 2 + Alembic, Postgres 16, Redis + RQ
 * Frontend: Next.js 14 (App Router), React, TypeScript
@@ -18,7 +20,7 @@ make up          # first run writes .env (random secrets, your user id), creates
 
 Open http://localhost:47213 and sign in as `admin` with the `ADMIN_PASSWORD` from `.env` (`change-me` by default). API docs: http://localhost:8000/docs. Both ports listen on 127.0.0.1 only.
 
-The home page is the **Agent hub**: one card per agent role (planner, researcher, writer, tester, reviewer) showing what each is working on right now and what its last output line says, a board per project (queued, agents working, needs you, done, stopped) and a live activity feed. Up to `WORKER_CONCURRENCY` tasks (default 4) run at the same time, so several agents work in parallel.
+The home page is **the Hive**: a honeycomb showing which agents are working, plus one card per agent role (planner, researcher, writer, tester, reviewer) showing what each is working on right now and what its last output line says, a board per project (queued, agents working, needs you, done, stopped) and a live activity feed. Up to `WORKER_CONCURRENCY` tasks (default 4) run at the same time, so several agents work in parallel.
 
 **Projects** group tasks under one big goal. Create one from the hub ("+ New project"), give it a goal, and add tasks to it. Every agent prompt includes the project goal and a list of the other in-flight tasks in the project with the files they are editing, so agents working in parallel stay out of each other's way.
 
@@ -66,14 +68,14 @@ cd ../frontend && npm install && npm run typecheck && npm run build
 | GET | `/tasks/{id}/logs` `/diff` `/validation` `/events` | Output (paged), latest diff, validation report, audit timeline |
 | GET | `/sessions` | Agent sessions |
 | POST/GET | `/repos`, `/repos/{id}/context` | Register repos; build / read cached repo context |
-| GET | `/hub` | Agent hub snapshot: active sessions per role with a readable "doing now" line, per-project boards, event feed, workers |
+| GET | `/hub` | Hive snapshot: active sessions per role with a readable "doing now" line, per-project boards, event feed, workers |
 | GET/POST/PUT | `/projects`, GET `/agents`, `/settings`, `/dead-letter` | Projects (name, goal, checks), configuration, dead-letter list |
 | GET | `/health`, `/health/ready`, `/health/workers` | Liveness, readiness (DB + Redis), queue depth and workers |
 
-## How the orchestrator works
+## How Hivemind works
 
 1. **Create.** The API checks the repo is a git repo with commits under the allowed roots, that the target branch exists, and that any validation commands pass the allowlist, stores the task as `queued` and enqueues one job. One worker at a time owns a task through a Redis lock with a 60 s TTL that a heartbeat keeps alive; API actions (approve, retry, cancel) take the same lock, so they never race a worker mid-step.
-2. **Plan** (`planning`). A worktree and branch `orch/task-<id>` are created from the target branch. Repo context (tree, manifests, tests, git log, module summary) is built, cached per HEAD sha. The read-only planner agent is asked for a JSON DAG; if it is missing or invalid (cycle, unknown dependency) a deterministic template for feature/bugfix is used and the fallback is logged. If the planner edits files, the task fails. Every prompt also carries the project goal and the other agents' in-flight tasks. Subtasks are routed to roles: researcher, planner, writer, tester, reviewer.
+2. **Plan** (`planning`). A worktree and branch `hivemind/task-<id>` are created from the target branch. Repo context (tree, manifests, tests, git log, module summary) is built, cached per HEAD sha. The read-only planner agent is asked for a JSON DAG; if it is missing or invalid (cycle, unknown dependency) a deterministic template for feature/bugfix is used and the fallback is logged. If the planner edits files, the task fails. Every prompt also carries the project goal and the other agents' in-flight tasks. Subtasks are routed to roles: researcher, planner, writer, tester, reviewer.
 3. **Risk gate** (`blocked`). Declared risk `high`/`critical`, or a score of 60+ from the description, requires a human *pre-run* approval before any code agent runs.
 4. **Run** (`assigned` → `running`). Subtasks execute in dependency order inside the one worktree. Each gets a session with a structured prompt (task, acceptance criteria, constraints, validation commands, repo summary, relevant files, earlier steps), within a character budget. stdout/stderr, tool calls and a cumulative diff are captured. After each session the changed files are compared with the role's policy: a read-only role that touches files, or the tester editing non-test files, fails the session. Crashed or failed sessions retry with exponential backoff.
 5. **Validate** (`validation`). The project's checks run (or are auto-detected from manifests). Commands are parsed to argv and must pass the allowlist; no shell. On a failure the output tail is sent back to the writer as a focused debug prompt, up to `max_retries`. Exhausted retries fail the task closed and put it in the dead-letter list.
@@ -82,7 +84,7 @@ cd ../frontend && npm install && npm run typecheck && npm run build
 
 ## Known tradeoffs and caveats
 
-* **Nothing is merged or pushed.** Approval commits to `orch/task-<id>` in your repo; merging or opening a PR is yours. GitHub/GitLab integration is not built.
+* **Nothing is merged or pushed.** Approval commits to `hivemind/task-<id>` in your repo; merging or opening a PR is yours. GitHub/GitLab integration is not built.
 * **Subtasks run serially inside one worktree.** Parallelism is across tasks and repos, not within a task's DAG. Concurrent tasks on one repo are isolated by worktree, and overlapping edited files raise a warning, but nothing is auto-merged.
 * **Tool restriction depends on the agent CLI.** The allowed/denied tool lists are only enforced if the CLI honours the flags. The post-session file check is the backstop, and it detects a violation after it happened (the task fails; the file is not reverted).
 * **Validation commands are allowlisted executables, not a sandbox.** `npm test` or `pytest` still execute repo code with the worker's privileges. Run workers in containers (as provided), not on a machine with credentials you care about.

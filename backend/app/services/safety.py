@@ -71,7 +71,7 @@ SECRET_ENV = {"SECRET_KEY", "DATABASE_URL", "REDIS_URL", "ADMIN_PASSWORD", "ADMI
 
 
 def child_env(extra: dict | None = None) -> dict:
-    """Environment for subprocesses: ours minus the orchestrator's own secrets."""
+    """Environment for subprocesses: ours minus Hivemind's own secrets."""
     env = {k: v for k, v in os.environ.items() if k not in SECRET_ENV}
     env["GIT_TERMINAL_PROMPT"] = "0"
     env.update(extra or {})
