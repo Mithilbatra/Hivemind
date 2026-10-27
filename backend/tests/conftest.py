@@ -20,7 +20,7 @@ def env(tmp_path, monkeypatch):
     for k, v in {"DATABASE_URL": f"sqlite:///{tmp_path}/t.db", "ALLOWED_REPO_ROOTS": str(repos),
                  "WORKTREES_DIR": str(tmp_path / "wt"), "DATA_DIR": str(tmp_path / "data"), "QUEUE_INLINE": "true",
                  "AGENT_MODE": "mock", "RETRY_BACKOFF_S": "0", "SECRET_KEY": "test", "ADMIN_USERNAME": "admin",
-                 "ADMIN_PASSWORD": "pw", "MOCK_FAIL_FIRST": "false"}.items():
+                 "ADMIN_PASSWORD": "pw", "MOCK_FAIL_FIRST": "false", "ALLOWED_HOSTS": "testserver"}.items():
         monkeypatch.setenv(k, v)
     get_settings.cache_clear()
     dbmod.reset_engine()

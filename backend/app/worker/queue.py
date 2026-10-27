@@ -50,9 +50,14 @@ def task_lock(task_id: int):
 
     def heartbeat():
         while not stop.wait(LOCK_TTL_S / 3):
-            if conn.get(key) != token.encode():
-                return
-            conn.expire(key, LOCK_TTL_S)
+            try:
+                held = conn.get(key)
+                if held == token.encode():
+                    conn.expire(key, LOCK_TTL_S)
+                elif held is not None or not conn.set(key, token, nx=True, ex=LOCK_TTL_S):
+                    return  # someone else holds it now; never steal
+            except Exception:  # a Redis blip must not end the refresher (the lock would silently lapse)
+                continue
 
     threading.Thread(target=heartbeat, daemon=True).start()
     try:

@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
 
@@ -34,7 +34,6 @@ class Project(Base):
     validation_commands: Mapped[list] = mapped_column(JSON, default=list)
     max_retries: Mapped[int] = mapped_column(Integer, default=2)
     created_at: Mapped[datetime] = _ts()
-    repos: Mapped[list["Repository"]] = relationship(back_populates="project")
 
 
 class Repository(Base):
@@ -45,7 +44,6 @@ class Repository(Base):
     path: Mapped[str] = mapped_column(String(1000), unique=True)
     default_branch: Mapped[str] = mapped_column(String(200), default="main")
     created_at: Mapped[datetime] = _ts()
-    project: Mapped[Project] = relationship(back_populates="repos")
 
 
 class RepoContext(Base):

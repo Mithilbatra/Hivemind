@@ -94,7 +94,7 @@ def parse_agent_plan(text: str) -> list[Step]:
         raise PlanError("no plan JSON object in planner output")
     try:
         steps = [Step(key=str(s["key"]), title=str(s["title"])[:300], description=str(s.get("description", "")),
-                      kind=s.get("kind", "implement"), deps=[str(d) for d in s.get("deps", [])]) for s in data["steps"]]
+                      kind=str(s.get("kind", "implement")), deps=[str(d) for d in s.get("deps", [])]) for s in data["steps"]]
     except (KeyError, TypeError) as e:
         raise PlanError(f"malformed plan: {e}")
     for s in steps:

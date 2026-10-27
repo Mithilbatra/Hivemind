@@ -85,8 +85,8 @@ def test_context_race_uses_the_other_workers_row(db, repo, monkeypatch):
     from app.db import session_scope
     real = context.build_context
 
-    def build_while_other_worker_inserts(path):
-        ctx = real(path)
+    def build_while_other_worker_inserts(path, sha):
+        ctx = real(path, sha)
         with session_scope() as other:  # the second worker commits first
             other.add(RepoContext(repo_id=repo.id, head_sha=ctx["head_sha"], summary={"by": "other"}))
             other.commit()

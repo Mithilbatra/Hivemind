@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import logging_setup
 from .agents import seed_agents
@@ -38,6 +39,8 @@ async def lifespan(app):
 def create_app() -> FastAPI:
     logging_setup.setup()
     app = FastAPI(title="Hivemind", lifespan=lifespan)
+    # A page that rebinds its own domain to 127.0.0.1 sends its own Host header; refuse it.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=get_settings().allowed_hosts.split(","))
     app.include_router(admin.public, prefix="/api")
     app.include_router(admin.router, prefix="/api")
     app.include_router(tasks.router, prefix="/api")

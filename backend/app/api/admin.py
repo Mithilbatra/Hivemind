@@ -17,11 +17,21 @@ public = APIRouter()
 router = APIRouter(dependencies=[Depends(current_user)])
 
 
+MAX_LOGIN_FAILURES, LOGIN_LOCKOUT_S = 10, 900
+
+
 @public.post("/auth/login")
 def login(body: Login, db=Depends(get_db)):
+    key = f"hivemind:login-fail:{body.username}"
+    conn = queue.get_redis()
+    if int(conn.get(key) or 0) >= MAX_LOGIN_FAILURES:
+        raise HTTPException(429, "too many failed logins; try again in 15 minutes")
     token = create_user_session(db, body.username, body.password)
     if token is None:
+        conn.incr(key)
+        conn.expire(key, LOGIN_LOCKOUT_S)
         raise HTTPException(401, "bad credentials")
+    conn.delete(key)
     return {"token": token, "username": body.username}
 
 
@@ -40,7 +50,7 @@ def ready(db=Depends(get_db)):
     return {"status": "ready"}
 
 
-@public.get("/health/workers")
+@router.get("/health/workers")
 def workers():
     try:
         conn, q = queue.get_redis(), queue.get_queue()
@@ -148,5 +158,4 @@ def runtime_settings():
     return {"agent_mode": s.agent_mode, "agent_command": s.agent_command, "allowed_repo_roots": s.repo_roots and
             [str(r) for r in s.repo_roots], "session_timeout_s": s.session_timeout_s,
             "validation_timeout_s": s.validation_timeout_s, "default_max_retries": s.max_retries,
-            "retry_backoff_s": s.retry_backoff_s, "worker_concurrency": s.worker_concurrency,
-            "command_allowlist": sorted(safety.ALLOWED_EXECUTABLES)}
+            "retry_backoff_s": s.retry_backoff_s, "command_allowlist": sorted(safety.ALLOWED_EXECUTABLES)}

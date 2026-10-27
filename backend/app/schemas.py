@@ -8,8 +8,8 @@ class ORM(BaseModel):
 
 
 class Login(BaseModel):
-    username: str
-    password: str
+    username: str = Field(max_length=100)  # also a Redis key for the failed-login counter
+    password: str = Field(max_length=1000)
 
 
 class ValidationCommand(BaseModel):
@@ -133,8 +133,7 @@ class WorktreeOut(ORM):
 
 
 class TaskDetail(TaskOut):
-    children: list[ChildOut]
-    sessions: list[SessionOut]
+    children: list[ChildOut]  # sessions come from GET /sessions?task_id=, only when the Agents tab asks
     approvals: list[ApprovalOut]
     worktree: WorktreeOut | None
     repo_name: str

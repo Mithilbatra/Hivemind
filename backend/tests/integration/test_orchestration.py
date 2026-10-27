@@ -140,7 +140,8 @@ def test_high_risk_requires_pre_run_approval(db, repo):
     assert t.status == states.BLOCKED
     assert db.query(Approval).filter_by(task_id=t.id, kind="pre_run", status="pending").count() == 1
     assert db.query(ValidationResult).filter_by(task_id=t.id).count() == 0
-    assert db.query(AgentSession).filter_by(top_task_id=t.id).count() == 1  # only the read-only planner ran
+    assert db.query(AgentSession).filter_by(top_task_id=t.id).count() == 0  # nothing runs before approval
+    assert db.query(BranchWorktree).filter_by(task_id=t.id).count() == 0  # not even a checkout
     with pytest.raises(BadRequest):
         review.decide(db, t, "request_changes", "me")
     assert review.decide(db, t, "approve", "me") is True

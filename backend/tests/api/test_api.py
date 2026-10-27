@@ -39,7 +39,9 @@ def test_create_list_detail(client):
     assert d["repo_name"] == "app" and len(d["children"]) == 5 and d["worktree"]["branch"] == f"hivemind/task-{t['id']}"
     by_title = {c["title"]: c for c in d["children"]}
     assert by_title["Write tests"]["depends_on"] == [by_title["Implement change"]["id"]]
-    assert d["approvals"][0]["kind"] == "pre_commit" and d["sessions"]
+    assert d["approvals"][0]["kind"] == "pre_commit" and "sessions" not in d  # fetched separately, see below
+    sessions = client.get("/api/sessions", params={"task_id": t["id"]}).json()
+    assert sessions and sessions[0]["tool_calls"] is not None
     assert client.get("/api/tasks/9999").status_code == 404
 
 
@@ -121,7 +123,7 @@ def test_failed_task_in_dead_letter_and_retry(client):
 def test_repos_projects_agents_settings(client, env):
     assert client.post("/api/repos", json={"path": "/etc"}).status_code == 400
     ctx = client.post(f"/api/repos/{client.repo_id}/context").json()
-    assert "Python" in ctx["summary"]["languages"] and "Branch" in ctx["rendered"]
+    assert "Python" in ctx["summary"]["languages"] and "Commit" in ctx["rendered"]
     assert client.get(f"/api/repos/{client.repo_id}/context").json()["head_sha"] == ctx["head_sha"]
     p = client.get("/api/projects").json()[0]
     body = {"name": p["name"], "allowed_roots": [], "max_retries": 1,

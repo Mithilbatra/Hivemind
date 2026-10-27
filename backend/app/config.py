@@ -2,6 +2,7 @@ import logging
 import secrets
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,7 +18,7 @@ class Settings(BaseSettings):
     token_ttl_s: int = 12 * 3600
 
     # Agent execution. `cli` runs AGENT_COMMAND as a subprocess, `mock` uses a scripted fake.
-    agent_mode: str = "cli"
+    agent_mode: Literal["cli", "mock"] = "cli"  # a typo fails at startup instead of silently meaning "cli"
     agent_command: str = ""  # e.g. see .env.example; the prompt is written to its stdin
     agent_tool_flags: bool = True  # append --allowedTools/--disallowedTools from the role's policy
     mock_fail_first: bool = False  # mock writer produces a failing change until it gets a debug prompt
@@ -32,8 +33,9 @@ class Settings(BaseSettings):
     validation_timeout_s: int = 600
     max_retries: int = 2
     retry_backoff_s: float = 2.0
-    worker_concurrency: int = 2
     queue_inline: bool = False  # run jobs synchronously in the caller (tests)
+    # Host names the API answers to (DNS-rebinding guard). "api" is the name the web container uses.
+    allowed_hosts: str = "localhost,127.0.0.1,api"
 
     max_prompt_chars: int = 24000
     max_log_chars: int = 200_000  # per session kept in DB; full log stays on disk

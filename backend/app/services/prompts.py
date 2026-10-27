@@ -8,6 +8,18 @@ TRIM_ORDER = ["team", "prior", "files", "repo", "goal", "criteria", "constraints
               "task"]
 
 
+def read_inside(root, rel: str, limit: int) -> str:
+    """First `limit` chars of root/rel, or "" if it is missing or resolves outside root (symlink escape)."""
+    p = Path(root) / rel
+    try:
+        if not p.resolve().is_relative_to(Path(root).resolve()) or not p.is_file():
+            return ""
+        with open(p, errors="replace") as fh:
+            return fh.read(limit)
+    except OSError:
+        return ""
+
+
 def select_relevant_files(worktree, tree: list[str], text: str, limit: int = 4, lines: int = 60) -> list[tuple[str, str]]:
     words = {w for w in "".join(c if c.isalnum() else " " for c in text.lower()).split() if len(w) > 3}
     scored = sorted(((sum(w in f.lower() for w in words), f) for f in tree), reverse=True)
@@ -15,9 +27,8 @@ def select_relevant_files(worktree, tree: list[str], text: str, limit: int = 4, 
     for score, f in scored[:limit]:
         if score == 0:
             break
-        p = Path(worktree) / f
-        if p.is_file():
-            out.append((f, "\n".join(p.read_text(errors="replace").splitlines()[:lines])))
+        if content := read_inside(worktree, f, 200 * lines):
+            out.append((f, "\n".join(content.splitlines()[:lines])))
     return out
 
 

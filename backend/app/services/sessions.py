@@ -10,6 +10,8 @@ from . import repo_state
 from .audit import emit
 from .runner import RunRequest, get_runner
 
+LOG_FILE_CAP = 50_000_000  # chars per session log file on disk
+
 
 def policy_violation(agent, changed: list[str]) -> str | None:
     if not changed:
@@ -39,18 +41,24 @@ def run_session(db, *, task, top, repo, bw, agent, prompt: str, kind: str, attem
     db.commit()
 
     before = repo_state.snapshot(bw.path)
-    state = {"seq": 0, "kept": 0, "truncated": False, "polled": 0.0}
+    state = {"seq": 0, "kept": 0, "truncated": False, "polled": 0.0, "file": 0}
     fh = open(log_file, "a")
 
     def on_output(stream: str, text: str):
-        fh.write(f"[{stream}] {text}\n")
+        if state["file"] < LOG_FILE_CAP:  # the file keeps far more than the DB, but not without limit
+            entry = f"[{stream}] {text}\n"
+            if state["file"] + len(entry) >= LOG_FILE_CAP:
+                entry = "[log file size limit reached]\n"
+                state["file"] = LOG_FILE_CAP
+            fh.write(entry)
+            state["file"] += len(entry)
         if state["kept"] < s.max_log_chars:
             db.add(OutputLog(session_id=sess.id, seq=state["seq"], stream=stream, chunk=text[:4000]))
             state["kept"] += len(text)
         elif not state["truncated"]:
             state["truncated"] = True
             db.add(OutputLog(session_id=sess.id, seq=state["seq"], stream="system",
-                             chunk="[log truncated in database; full log is kept on disk]"))
+                             chunk="[log truncated here; use 'Full log' for the rest]"))
         state["seq"] += 1
 
     def should_cancel() -> bool:

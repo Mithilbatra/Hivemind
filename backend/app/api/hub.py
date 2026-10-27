@@ -5,6 +5,7 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 
+from .. import states
 from ..auth import current_user
 from ..db import get_db
 from ..models import (
@@ -22,7 +23,7 @@ from . import admin
 
 router = APIRouter(dependencies=[Depends(current_user)])
 
-TASK_LIMIT = 300  # most recent top-level tasks shown on the boards
+TASK_LIMIT = 300  # finished top-level tasks shown on the boards (open ones are always all shown)
 EVENT_LIMIT = 40
 
 
@@ -54,7 +55,14 @@ def hub(db=Depends(get_db)):
     running = db.query(AgentSession).filter_by(status="running").order_by(AgentSession.id).all()
     recent = (db.query(AgentSession).filter(AgentSession.status != "running")
               .order_by(AgentSession.id.desc()).limit(60).all())
-    tops = db.query(Task).filter(Task.parent_id.is_(None)).order_by(Task.id.desc()).limit(TASK_LIMIT).all()
+    # Every open task (so nothing waiting for you can drop off), plus the newest finished ones.
+    top_q = db.query(Task).filter(Task.parent_id.is_(None))
+    tops = (top_q.filter(Task.status.notin_(states.TERMINAL)).order_by(Task.id.desc()).all()
+            + top_q.filter(Task.status.in_(states.TERMINAL)).order_by(Task.id.desc()).limit(TASK_LIMIT).all())
+    counts = defaultdict(dict)  # true per-project totals for the column headers, beyond the TASK_LIMIT shown
+    for pid, status, n in (db.query(Task.project_id, Task.status, func.count()).filter(Task.parent_id.is_(None))
+                           .group_by(Task.project_id, Task.status)):
+        counts[pid][status] = n
     events = db.query(AuditEvent).order_by(AuditEvent.id.desc()).limit(EVENT_LIMIT).all()
 
     task_ids = {s.task_id for s in running + recent} | {s.top_task_id for s in running + recent}
@@ -102,7 +110,7 @@ def hub(db=Depends(get_db)):
             "risk_score": t.risk_score, "dead_letter": t.dead_letter, "updated_at": t.updated_at,
             "progress": progress[t.id], "conflict": t.id in conflicts,
             "agent": {"role": w["role"], "subtask": w["task_title"]} if w else None})
-    projects = [{"id": p.id, "name": p.name, "description": p.description, "tasks": boards[p.id]}
+    projects = [{"id": p.id, "name": p.name, "description": p.description, "tasks": boards[p.id], "counts": counts[p.id]}
                 for p in db.query(Project).order_by(Project.id)]
 
     feed = []

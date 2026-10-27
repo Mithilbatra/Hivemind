@@ -36,16 +36,14 @@ def decide(db, task: Task, action: str, user: str, reason: str = "", confirm: bo
         if action == "reject":
             orchestrator.cancel_now(db, task, f"pre-run approval rejected: {reason}", actor)
             return False
-        transition(db, task, states.ASSIGNED, "pre-run approved", actor)
+        transition(db, task, states.QUEUED, "pre-run approved", actor)  # planning starts only now
         return True
     if action == "force_commit":
         if task.status not in (states.FAILED, states.REVIEW):
             raise BadRequest("force_commit applies to failed or in-review tasks")
         if not (confirm and reason.strip()):
             raise BadRequest("force_commit needs confirm=true and a reason")
-        bw = db.query(BranchWorktree).filter_by(task_id=task.id).one_or_none()
-        if bw is None or not bw.active or not Path(bw.path).exists():
-            raise BadRequest("no worktree to commit")
+        bw = _worktree(db, task)
         a = _pending(db, task, "pre_commit") or Approval(task_id=task.id, kind="pre_commit")
         db.add(a)
         _decide(a, "forced", user, reason)
@@ -58,9 +56,10 @@ def decide(db, task: Task, action: str, user: str, reason: str = "", confirm: bo
     if a is None:
         raise BadRequest("no pending approval")
     if action == "approve":
+        bw = _worktree(db, task)
         _decide(a, "approved", user, reason)
         emit(db, task.id, "approval_decision", "approved", {"reason": reason}, actor)
-        _finish(db, task, orchestrator.worktree_of(db, task), actor)
+        _finish(db, task, bw, actor)
         return False
     if action == "reject":
         _decide(a, "rejected", user, reason)
@@ -76,8 +75,15 @@ def decide(db, task: Task, action: str, user: str, reason: str = "", confirm: bo
     return True
 
 
+def _worktree(db, task) -> BranchWorktree:
+    bw = db.query(BranchWorktree).filter_by(task_id=task.id).one_or_none()
+    if bw is None or not bw.active or not Path(bw.path).exists():
+        raise BadRequest("the task's checkout is gone, so there is nothing to commit; retry the task")
+    return bw
+
+
 def _finish(db, task, bw, actor):
     repo_state.commit(db, task, bw, f"{task.title}\n\nTask #{task.id} (Hivemind branch {bw.branch})")
     repo_state.release_worktree(db, bw, db.get(Repository, task.repo_id), delete_branch=False)
-    task.error = None
+    task.error, task.dead_letter = None, False  # a force-committed task is done, not dead
     transition(db, task, states.COMPLETED, "committed after approval", actor)

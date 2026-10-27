@@ -3,6 +3,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import uuid
 from functools import cache
 from pathlib import Path
 
@@ -32,9 +33,13 @@ def _excludes(data_dir: Path) -> str:
 
 def git(cwd, *args: str, check: bool = True) -> str:
     s = get_settings()
+    # Hooks off: a relative core.hooksPath (husky) would run hook files the agent can edit in the worktree.
+    # quotePath off: non-ASCII file names come back as real paths, not "caf\303\251.txt".
     cmd = ["git", "-c", f"core.excludesFile={_excludes(s.data_dir)}", "-c", f"user.name={s.git_author_name}",
-           "-c", f"user.email={s.git_author_email}", *args]
-    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=120, env=safety.child_env())
+           "-c", f"user.email={s.git_author_email}", "-c", f"core.hooksPath={os.devnull}", "-c", "core.quotePath=false",
+           *args]
+    # errors="replace": a Latin-1 file in a diff must not crash the session
+    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, errors="replace", timeout=120, env=safety.child_env())
     if check and r.returncode != 0:
         raise GitError(f"git {' '.join(args)} failed: {r.stderr.strip() or r.stdout.strip()}")
     return r.stdout
@@ -59,13 +64,16 @@ def create_worktree(db, task, repo) -> BranchWorktree:
     base_sha = resolve_ref(repo.path, base_ref)
     if base_sha is None:  # never fall back to whatever is checked out: the diff would be against the wrong base
         raise GitError(f"base branch '{base_ref}' not found in {repo.path}")
-    branch = f"hivemind/task-{task.id}"
+    branch = bw.branch if bw else f"hivemind/task-{task.id}"
     path = (get_settings().worktrees_dir / f"task-{task.id}").resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         shutil.rmtree(path)
     git(repo.path, "worktree", "prune")
-    if git(repo.path, "branch", "--list", branch).strip():
+    exists = bool(git(repo.path, "branch", "--list", branch).strip())
+    if exists and bw is None:  # left over from an earlier database (ids restart at 1): never adopt its commits
+        branch, exists = f"{branch}-{uuid.uuid4().hex[:6]}", False
+    if exists:  # our own branch, resuming after the checkout was lost
         git(repo.path, "worktree", "add", str(path), branch)
         base_sha = git(path, "merge-base", branch, base_sha).strip() or base_sha
     else:

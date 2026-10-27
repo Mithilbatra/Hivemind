@@ -118,8 +118,18 @@ def fail(db, top, reason: str) -> None:
 def _plan(db, top, repo, project):
     if top.status == states.QUEUED:
         transition(db, top, states.PLANNING, "planning started")
+    # Gate before anything runs: a blocked task gets no checkout and no agent session until a human approves.
+    top.risk_score, top.risk_reasons = risk.assess(top)
+    approvals = db.query(Approval).filter_by(task_id=top.id, kind="pre_run").all()
+    if risk.needs_pre_run_approval(top, top.risk_score) and not any(a.status == "approved" for a in approvals):
+        if not any(a.status == "pending" for a in approvals):
+            db.add(Approval(task_id=top.id, kind="pre_run"))
+        emit(db, top.id, "approval_required", f"pre-run approval required (risk {top.risk_score})",
+             {"reasons": top.risk_reasons})
+        transition(db, top, states.BLOCKED, "waiting for pre-run approval")
+        return
     bw = repo_state.create_worktree(db, top, repo)
-    ctx = context.get_or_create_context(db, repo).summary
+    ctx = context.get_or_create_context(db, repo, bw.base_sha).summary
     if not children_of(db, top):
         steps = _make_plan(db, top, repo, project, bw, ctx)
         if steps is None:
@@ -138,15 +148,6 @@ def _plan(db, top, repo, project):
                 db.add(TaskDependency(task_id=ids[st.key], depends_on_id=ids[d]))
         emit(db, top.id, "plan_created", f"{len(steps)} subtasks",
              {"steps": [{"key": s.key, "kind": s.kind, "deps": s.deps} for s in steps]})
-    top.risk_score, top.risk_reasons = risk.assess(top)
-    approvals = db.query(Approval).filter_by(task_id=top.id, kind="pre_run").all()
-    if risk.needs_pre_run_approval(top, top.risk_score) and not any(a.status == "approved" for a in approvals):
-        if not any(a.status == "pending" for a in approvals):
-            db.add(Approval(task_id=top.id, kind="pre_run"))
-        emit(db, top.id, "approval_required", f"pre-run approval required (risk {top.risk_score})",
-             {"reasons": top.risk_reasons})
-        transition(db, top, states.BLOCKED, "waiting for pre-run approval")
-        return
     transition(db, top, states.ASSIGNED, "plan ready")
 
 
@@ -185,7 +186,7 @@ def _session_prompt(db, top, repo, bw, ctx, agent, task, kind, project, failure=
 
 def _run(db, top, repo, project):
     bw = worktree_of(db, top)
-    ctx = context.get_or_create_context(db, repo).summary
+    ctx = context.get_or_create_context(db, repo, bw.base_sha).summary
     if top.pending_prompt:
         kind, text = top.pending_kind or "debug", top.pending_prompt
         agent = get_agent(db, "writer")
@@ -246,7 +247,7 @@ def _run_child(db, top, repo, project, bw, ctx, child, prior) -> str:
 
 def _validate(db, top, repo, project):
     bw = worktree_of(db, top)
-    ctx = context.get_or_create_context(db, repo).summary
+    ctx = context.get_or_create_context(db, repo, bw.base_sha).summary
     checks = validation.effective_checks(top, project, ctx)
     # Not retry_count + 1: retry_count restarts at 0 after "request changes" or a manual retry.
     attempt = (db.query(func.max(ValidationResult.attempt)).filter_by(task_id=top.id).scalar() or 0) + 1
@@ -261,6 +262,10 @@ def _validate(db, top, repo, project):
         db.add(Approval(task_id=top.id, kind="pre_commit"))
         transition(db, top, states.REVIEW, f"validation passed (risk {top.risk_score})")
         return
+    broken = [r for r in failed if validation.unrunnable(r)]
+    if broken:  # the agent can't install tools or change the allowlist, so a retry would only burn sessions
+        return fail(db, top, "check could not run, fix the environment or the project's checks: "
+                    + "; ".join(f"{r.command}: {r.output_tail[:120]}" for r in broken))
     if top.retry_count < top.max_retries:
         top.retry_count += 1
         top.pending_kind, top.pending_prompt = "debug", prompts.failure_report(failed)

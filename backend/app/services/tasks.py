@@ -3,6 +3,7 @@ import uuid
 from pathlib import Path
 
 from .. import states
+from ..config import get_settings
 from ..models import BranchWorktree, Project, Repository, Task
 from ..states import transition
 from ..worker import queue
@@ -46,6 +47,9 @@ def create_tasks(db, *, title: str, description: str = "", repo_ids: list[int] |
                  acceptance_criteria: str = "", validation_commands: list | None = None, user: str = "system") -> list[Task]:
     if priority not in PRIORITIES or risk_level not in RISKS:
         raise BadRequest("invalid priority or risk_level")
+    s = get_settings()
+    if s.agent_mode == "cli" and not s.agent_command.strip():  # else every session fails and burns its retries
+        raise BadRequest("AGENT_COMMAND is not set; set it, or use AGENT_MODE=mock for the demo agent")
     repos = [db.get(Repository, i) for i in (repo_ids or [])]
     if any(r is None for r in repos):
         raise BadRequest("unknown repo id")

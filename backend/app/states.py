@@ -5,7 +5,6 @@ from .services.audit import emit
 QUEUED, PLANNING, ASSIGNED, RUNNING, VALIDATION = "queued", "planning", "assigned", "running", "validation"
 BLOCKED, REVIEW, COMPLETED, FAILED, CANCELLED = "blocked", "waiting_for_review", "completed", "failed", "cancelled"
 
-ALL = [QUEUED, PLANNING, ASSIGNED, RUNNING, VALIDATION, BLOCKED, REVIEW, COMPLETED, FAILED, CANCELLED]
 TERMINAL = {COMPLETED, FAILED, CANCELLED}
 
 ALLOWED: dict[str, set[str]] = {

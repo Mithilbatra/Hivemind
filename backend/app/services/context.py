@@ -24,16 +24,15 @@ DIR_HINTS = {"src": "main source", "app": "application code", "api": "HTTP API",
              "cmd": "entrypoints", "pkg": "packages", "infra": "infrastructure", "deploy": "deployment"}
 
 
-def _read(path: Path, limit: int) -> str:
-    try:
-        return path.read_text(errors="replace")[:limit]
-    except OSError:
-        return ""
-
-
-def build_context(repo_path) -> dict:
+def build_context(repo_path, sha: str) -> dict:
+    """Describe commit `sha` from git objects: the task's real base, no uncommitted edits, symlinks never followed
+    (`git show` of a symlink gives its target path, not the target's content)."""
     root = Path(repo_path)
-    files = [f for f in git(root, "ls-files").splitlines() if f]
+    files = [f for f in git(root, "ls-tree", "-r", "--name-only", "-z", sha).split("\0") if f]
+    present = set(files)
+
+    def blob(rel: str, limit: int) -> str:
+        return git(root, "show", f"{sha}:{rel}", check=False)[:limit] if rel in present else ""
     langs = Counter(LANGS[Path(f).suffix] for f in files if Path(f).suffix in LANGS)
     tops: dict[str, list[str]] = {}
     for f in files:
@@ -45,21 +44,20 @@ def build_context(repo_path) -> dict:
         exts = Counter(LANGS[Path(f).suffix] for f in fs if Path(f).suffix in LANGS)
         modules.append({"dir": name, "files": len(fs), "purpose": DIR_HINTS.get(name.lower(), ""),
                         "languages": [k for k, _ in exts.most_common(2)]})
-    manifests = {m: _read(root / m, 1500) for m in MANIFESTS if (root / m).is_file()}
-    blob = " ".join(manifests.values()).lower()
-    docs = {d: _read(root / d, 1500) for d in KEY_DOCS if (root / d).is_file()}
+    manifests = {m: t for m in MANIFESTS if (t := blob(m, 1500))}
+    text = " ".join(manifests.values()).lower()
+    docs = {d: t for d in KEY_DOCS if (t := blob(d, 1500))}
     scripts = {}
     if "package.json" in manifests:
         try:
-            scripts = json.loads(_read(root / "package.json", 50_000)).get("scripts", {})
-        except json.JSONDecodeError:
+            scripts = json.loads(blob("package.json", 50_000)).get("scripts", {})
+        except (json.JSONDecodeError, AttributeError):
             pass
     return {
-        "head_sha": head_sha(root),
-        "branch": git(root, "rev-parse", "--abbrev-ref", "HEAD").strip(),
+        "head_sha": sha,
         "file_count": len(files),
         "languages": dict(langs.most_common()),
-        "frameworks": [f for f in FRAMEWORKS if re.search(rf"\b{f}\b", blob)],
+        "frameworks": [f for f in FRAMEWORKS if re.search(rf"\b{f}\b", text)],
         "modules": modules,
         "root_files": sorted(f for f in tops.get(".", []))[:40],
         "tree": files[:5000],  # only used to pick relevant files, never rendered into a prompt whole
@@ -67,7 +65,7 @@ def build_context(repo_path) -> dict:
         "npm_scripts": scripts,
         "tests": [f for f in files if TEST_RE.search(f)][:60],
         "docs": docs,
-        "git_log": git(root, "log", "-n", "15", "--pretty=format:%h %ad %s", "--date=short", check=False).splitlines(),
+        "git_log": git(root, "log", "-n", "15", "--pretty=format:%h %ad %s", "--date=short", sha, check=False).splitlines(),
     }
 
 
@@ -75,7 +73,7 @@ def render(ctx: dict, budget: int = 6000) -> str:
     """Compact text form, most useful sections first, hard-capped at `budget` chars."""
     langs = ", ".join(f"{k} ({v})" for k, v in ctx["languages"].items()) or "unknown"
     parts = [
-        f"Branch {ctx['branch']} @ {ctx['head_sha'][:8]}; {ctx['file_count']} files; languages: {langs}",
+        f"Commit {ctx['head_sha'][:8]}; {ctx['file_count']} files; languages: {langs}",
         "Frameworks: " + (", ".join(ctx["frameworks"]) or "none detected"),
         "Modules:\n" + "\n".join(f"- {m['dir']}/ ({m['files']} files{', ' + m['purpose'] if m['purpose'] else ''}"
                                  f"{', ' + '/'.join(m['languages']) if m['languages'] else ''})" for m in ctx["modules"]),
@@ -117,13 +115,13 @@ def suggest_validation(ctx: dict) -> list[dict]:
     return cmds
 
 
-def get_or_create_context(db, repo, force: bool = False) -> RepoContext:
-    """Cached per (repo, HEAD sha): a new commit invalidates the cache."""
-    sha = head_sha(repo.path)
+def get_or_create_context(db, repo, sha: str | None = None, force: bool = False) -> RepoContext:
+    """Cached per (repo, commit). Tasks pass their base commit; without one, the repo's current HEAD is used."""
+    sha = sha or head_sha(repo.path)
     row = db.query(RepoContext).filter_by(repo_id=repo.id, head_sha=sha).one_or_none()
     if row and not force:
         return row
-    ctx = build_context(repo.path)
+    ctx = build_context(repo.path, sha)
     if row:
         row.summary = ctx
         db.commit()

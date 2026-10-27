@@ -62,12 +62,20 @@ class CLIRunner:
             if req.tool_policy.get("disallowed"):
                 argv += ["--disallowedTools", ",".join(req.tool_policy["disallowed"])]
         try:
+            # errors="replace": one invalid UTF-8 byte used to kill a reader thread and hang this loop forever
             proc = subprocess.Popen(argv, cwd=req.cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                    text=True, env=child_env(), start_new_session=True)
+                                    text=True, errors="replace", env=child_env(), start_new_session=True)
         except OSError as e:
             req.on_output("stderr", f"cannot start agent command {argv[0]!r}: {e}")
             return RunResult("failed", summary=f"cannot start agent: {e}")
-        q: queue.Queue = queue.Queue()
+        try:
+            return self._watch(req, proc)
+        finally:
+            if proc.poll() is None:  # we are leaving because of an error: never leave the agent running
+                _kill(proc)
+
+    def _watch(self, req: RunRequest, proc) -> RunResult:
+        q: queue.Queue = queue.Queue(maxsize=10_000)  # bounded: a flood of output waits for us instead of filling memory
 
         def pump(stream, name):
             for line in stream:
@@ -82,15 +90,17 @@ class CLIRunner:
         except BrokenPipeError:
             pass
 
-        tools, final, texts, tail = [], "", [], []
-        deadline, open_streams, status = time.time() + req.timeout_s, 2, None
+        tools, final, texts, tail, kept = [], "", [], [], 0
+        deadline, open_streams, status, stopped = time.time() + req.timeout_s, 2, None, 0.0
         while open_streams or proc.poll() is None:
-            if status is None and req.should_cancel():
-                status = "cancelled"
+            if not stopped and req.should_cancel():
+                status, stopped = "cancelled", time.time()
                 _kill(proc)
-            elif status is None and time.time() > deadline:
-                status = "timeout"
+            elif not stopped and time.time() > deadline:  # also after an error result: a hung agent still times out
+                status, stopped = status or "timeout", time.time()
                 _kill(proc)
+            elif stopped and time.time() > stopped + 10:  # killed, but something it spawned still holds the pipes
+                break
             try:
                 name, line = q.get(timeout=0.5)
             except queue.Empty:
@@ -106,23 +116,33 @@ class CLIRunner:
                 try:
                     ev = json.loads(line)
                 except json.JSONDecodeError:
-                    texts.append(line)
-                    continue
-                if ev.get("type") == "assistant":
-                    for c in ev.get("message", {}).get("content", []):
-                        if c.get("type") == "tool_use":
+                    ev = None
+                said = []
+                if not isinstance(ev, dict):  # plain text, or JSON that is not an event (`42`, `true`, a list)
+                    said = [line]
+                elif ev.get("type") == "assistant":
+                    for c in (ev.get("message") or {}).get("content") or []:
+                        if not isinstance(c, dict):
+                            continue
+                        if c.get("type") == "tool_use" and len(tools) < 200:
                             tools.append({"name": c.get("name"), "input": str(c.get("input"))[:300]})
                         elif c.get("type") == "text":
-                            texts.append(c.get("text", ""))
+                            said.append(str(c.get("text") or ""))
                 elif ev.get("type") == "result":
-                    final = ev.get("result", "") or ""
+                    final = str(ev.get("result") or "")
                     if ev.get("is_error") and status is None:
                         status = "failed"
+                for t in said:  # only the first 50k chars are ever used, so stop collecting there
+                    if kept < 50_000:
+                        texts.append(t)
+                        kept += len(t)
         code = proc.wait()
         text = final or "\n".join(texts) or "\n".join(tail)
         if status is None:
             status = "succeeded" if code == 0 else "failed"
-        return RunResult(status, code, text[-2000:], text[:50_000], tools[:200])
+        # The summary is the end of what the agent said; past the 50k cap only the raw tail still has the end.
+        summary = (final or ("\n".join(texts) if kept < 50_000 else "\n".join(tail)))[-2000:]
+        return RunResult(status, code, summary, text[:50_000], tools)
 
 
 MOCK_TEST = """import os

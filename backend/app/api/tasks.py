@@ -1,10 +1,13 @@
 from contextlib import contextmanager
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import or_
 
 from .. import states
 from ..auth import current_user
+from ..config import get_settings
 from ..db import get_db
 from ..models import (
     AgentSession,
@@ -112,7 +115,6 @@ def detail(task_id: int, db=Depends(get_db)):
     return TaskDetail(
         **data, repo_name=repo.name, repo_path=repo.path,
         children=[ChildOut(**TaskOut.model_validate(k).model_dump(), depends_on=deps.get(k.id, [])) for k in kids],
-        sessions=db.query(AgentSession).filter_by(top_task_id=t.id).order_by(AgentSession.id).all(),
         approvals=db.query(Approval).filter_by(task_id=t.id).order_by(Approval.id).all(),
         worktree=worktree)
 
@@ -189,7 +191,7 @@ def approval(task_id: int, body: ApprovalIn, db=Depends(get_db), user=Depends(cu
     try:
         with _exclusive(db, t):
             requeue = review.decide(db, t, body.action, user.username, body.reason, body.confirm)
-    except (svc.BadRequest, InvalidTransition) as e:
+    except (svc.BadRequest, InvalidTransition, repo_state.GitError) as e:  # e.g. a locked index: say why, not "500"
         raise HTTPException(409, str(e))
     if requeue:
         _enqueue(t.id)
@@ -207,6 +209,18 @@ def logs(task_id: int, session_id: int | None = None, offset: int = 0, limit: in
     return {"sessions": [{"id": s.id, "role": s.agent_role, "status": s.status, "task_id": s.task_id} for s in sessions],
             "offset": offset, "next_offset": offset + len(rows),
             "lines": [{"session_id": r.session_id, "seq": r.seq, "stream": r.stream, "text": r.chunk} for r in rows]}
+
+
+@router.get("/{task_id}/sessions/{session_id}/log")
+def full_log(task_id: int, session_id: int, db=Depends(get_db)):
+    """The whole on-disk log; the database keeps only the first max_log_chars of each session."""
+    s = db.get(AgentSession, session_id)
+    if s is None or s.top_task_id != _top(db, task_id).id:
+        raise HTTPException(404, "session not found")
+    p = Path(s.log_path)
+    if not p.resolve().is_relative_to(get_settings().data_dir.resolve()) or not p.is_file():
+        raise HTTPException(404, "log file not found")
+    return FileResponse(p, media_type="text/plain", filename=f"session-{s.id}.log")
 
 
 @router.get("/{task_id}/diff", response_model=DiffOut | None)

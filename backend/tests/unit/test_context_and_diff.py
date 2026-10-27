@@ -4,7 +4,7 @@ from app.services.tasks import create_tasks
 
 
 def test_context_generation(repo, make_repo):
-    ctx = context.build_context(repo.path)
+    ctx = context.build_context(repo.path, repo_state.head_sha(repo.path))
     assert ctx["file_count"] >= 4 and "Python" in ctx["languages"]
     assert "tests/test_app.py" in ctx["tests"]
     assert any(m["dir"] == "src" for m in ctx["modules"])
