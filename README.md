@@ -10,6 +10,26 @@
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and [samples/workflows.md](samples/workflows.md) for walkthroughs.
 
+## Screenshots
+
+**The Hive**: the honeycomb lights up each agent role while it works; below, what every agent is doing right now and a live activity feed.
+
+![The Hive home page: a honeycomb of agent roles with the researcher working on three tasks, agent cards and the activity feed](docs/screenshots/hive.png)
+
+**Review before commit**: risk score, validation result, overlap warnings with other tasks, and the diff. Nothing is committed until you approve.
+
+![A task waiting for review: approval panel with risk reasons, a merge-conflict warning and the diff](docs/screenshots/task-review.png)
+
+**Validation and retry**: the first attempt failed its tests, the failure went back to the agent as a debug prompt, and the second attempt passed.
+
+![Validation tab: attempt 1 failed with an assertion error, attempt 2 passed](docs/screenshots/task-validation.png)
+
+| Tasks | Sign in |
+|---|---|
+| ![Task list with status and risk for each task](docs/screenshots/tasks.png) | ![Hivemind sign-in page with the honeycomb logo](docs/screenshots/login.png) |
+
+Screenshots use the built-in demo agent (`AGENT_MODE=mock`), which is why every task edits the same placeholder file.
+
 ## Run it
 
 Requires Docker with Compose v2.
