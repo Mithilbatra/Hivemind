@@ -21,7 +21,7 @@ export type Worktree = {
   conflict_with: { task_id: number; files: string[] }[]; active: boolean; commit_sha: string | null;
 };
 export type TaskDetail = Task & {
-  children: Child[]; sessions: Session[]; approvals: Approval[]; worktree: Worktree | null;
+  children: Child[]; approvals: Approval[]; worktree: Worktree | null;
   repo_name: string; repo_path: string;
 };
 export type Validation = {
@@ -57,7 +57,7 @@ export type HubEvent = {
 };
 export type Hub = {
   agents: HubAgent[]; active: HubSession[]; events: HubEvent[];
-  projects: { id: number; name: string; description: string; tasks: HubTask[] }[];
+  projects: { id: number; name: string; description: string; tasks: HubTask[]; counts: Record<string, number> }[];
   workers: { queued: number; failed: number; workers: { name: string; state: string }[] } | null;
 };
 export type AgentDef = { role: string; description: string; constraints: string[]; can_write: boolean; writable_globs: string[]; tool_policy: { allowed?: string[]; disallowed?: string[] } };
@@ -69,6 +69,11 @@ export const token = () => (typeof window === "undefined" ? "" : localStorage.ge
 export const setToken = (t: string | null) => (t ? localStorage.setItem(TOKEN, t) : localStorage.removeItem(TOKEN));
 
 export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
+  return (await request(path, init)).json();
+}
+
+/** Authenticated fetch with the same login and error handling as `api`, for non-JSON bodies. */
+export async function request(path: string, init: RequestInit & { json?: unknown } = {}): Promise<Response> {
   const headers: Record<string, string> = { Authorization: `Bearer ${token()}` };
   if (init.json !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(`/api${path}`, {
@@ -82,7 +87,7 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
     const body = await res.json().catch(() => ({}));
     throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail ?? res.statusText));
   }
-  return res.json();
+  return res;
 }
 
 export const ACTIVE = ["queued", "planning", "assigned", "running", "validation"];

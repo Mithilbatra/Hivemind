@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import TaskForm from "@/components/TaskForm";
@@ -49,9 +50,9 @@ export default function TaskList() {
           <thead><tr><th>#</th><th>Title</th><th>Repo</th><th>Status</th><th>Risk</th><th>Priority</th><th>Updated</th></tr></thead>
           <tbody>
             {(tasks ?? []).map((t) => (
-              <tr key={t.id} className="click" onClick={() => router.push(`/tasks/${t.id}`)}>
+              <tr key={t.id}>
                 <td>{t.id}</td>
-                <td><b>{t.title}</b>{t.dead_letter && <span className="badge bad" style={{ marginLeft: 8 }}>dead-letter</span>}</td>
+                <td><Link href={`/tasks/${t.id}`}><b>{t.title}</b></Link>{t.dead_letter && <span className="badge bad" style={{ marginLeft: 8 }}>dead-letter</span>}</td>
                 <td>{repoName(t.repo_id)}</td><td><StatusBadge status={t.status} /></td>
                 <td><RiskBadge score={t.risk_score} /></td><td>{t.priority}</td><td className="muted">{ago(t.updated_at)}</td>
               </tr>

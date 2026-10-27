@@ -17,7 +17,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     if (!login && !token()) router.replace("/login");
     else setReady(true);
   }, [login, router, path]);
-  const { data: w } = usePoll(() => api<Workers>("/health/workers"), login ? 0 : 10000, [login]);
+  // Both need a login: on the login page a 401 would redirect to the login page, again and again.
+  const { data: w } = usePoll(() => (login ? Promise.resolve(null) : api<Workers>("/health/workers")), login ? 0 : 10000, [login]);
+  const { data: rt } = usePoll(() => (login ? Promise.resolve(null) : api<{ agent_mode: string }>("/settings")), 0, [login]);
   if (login) return <main className="login comb">{children}</main>;
   if (!ready) return null;
   return (
@@ -34,6 +36,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </span>
         <button onClick={() => { setToken(null); router.replace("/login"); }}>Sign out</button>
       </header>
+      {rt?.agent_mode === "mock" && (
+        <div className="demo" role="status">
+          Demo agent (AGENT_MODE=mock): agents only write placeholder files. Set AGENT_MODE=cli and AGENT_COMMAND for real work.
+        </div>
+      )}
       <main>{children}</main>
     </>
   );

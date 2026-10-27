@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { api, LogLine, Logs } from "@/lib/api";
+import { api, LogLine, Logs, request } from "@/lib/api";
 
 export default function LogViewer({ taskId, live }: { taskId: number; live: boolean }) {
   const [session, setSession] = useState<number | "">("");
@@ -8,6 +8,18 @@ export default function LogViewer({ taskId, live }: { taskId: number; live: bool
   const [sessions, setSessions] = useState<Logs["sessions"]>([]);
   const offset = useRef(0);
   const box = useRef<HTMLDivElement>(null);
+  const [err, setErr] = useState("");
+
+  async function downloadFull(id: number) {  // the page shows the first part; the whole log is a file on the server
+    setErr("");
+    try {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await (await request(`/tasks/${taskId}/sessions/${id}/log`)).blob());
+      a.download = `session-${id}.log`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10_000);  // revoking at once can cancel the download
+    } catch (e) { setErr((e as Error).message); }
+  }
 
   useEffect(() => { offset.current = 0; setLines([]); }, [session, taskId]);
   useEffect(() => {
@@ -36,7 +48,9 @@ export default function LogViewer({ taskId, live }: { taskId: number; live: bool
           {sessions.map((s) => <option key={s.id} value={s.id}>#{s.id} {s.role} ({s.status})</option>)}
         </select>
         <span className="muted small">{lines.length} lines{live ? " · live" : ""}</span>
+        {session !== "" && <button onClick={() => downloadFull(session)}>Full log</button>}
       </div>
+      {err && <div className="banner bad">{err}</div>}
       <div className="log mono" ref={box}>
         {lines.length ? lines.map((l, i) => (
           <div key={i} className={l.stream === "stderr" ? "err" : l.stream === "system" ? "sys" : ""}>

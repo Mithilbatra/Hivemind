@@ -99,12 +99,12 @@ function ProjectBoard({ p, repos, projects, onCreated }: {
   p: Hub["projects"][number]; repos: Repo[]; projects: Project[]; onCreated: () => void;
 }) {
   const [adding, setAdding] = useState(false);
-  const done = p.tasks.filter((t) => t.status === "completed").length;
+  const total = Object.values(p.counts).reduce((a, b) => a + b, 0);  // counts cover tasks beyond the ones loaded
   return (
     <section className="card">
       <div className="row">
         <h2 style={{ margin: 0 }}>{p.name}</h2>
-        <span className="muted small">{done}/{p.tasks.length} tasks done</span>
+        <span className="muted small">{p.counts.completed ?? 0}/{total} tasks done</span>
         <span style={{ flex: 1 }} />
         <button onClick={() => setAdding(!adding)}>{adding ? "Close" : "+ Task"}</button>
       </div>
@@ -117,11 +117,12 @@ function ProjectBoard({ p, repos, projects, onCreated }: {
             {COLUMNS.map((c) => {
               const ts = p.tasks.filter((t) => c.statuses.includes(t.status));
               const shown = c.cap ? ts.slice(0, c.cap) : ts;
+              const n = c.statuses.reduce((sum, s) => sum + (p.counts[s] ?? 0), 0);
               return (
                 <div key={c.title} className="col">
-                  <h4>{c.title} · {ts.length}</h4>
+                  <h4>{c.title} · {n}</h4>
                   {shown.map((t) => <TaskCard key={t.id} t={t} />)}
-                  {ts.length > shown.length && <Link className="small" href="/tasks">+{ts.length - shown.length} more</Link>}
+                  {n > shown.length && <Link className="small" href="/tasks">+{n - shown.length} more</Link>}
                 </div>
               );
             })}
@@ -183,10 +184,10 @@ export default function Hive() {
   if (error && !hub) return <div className="banner bad">{error}</div>;
   if (!hub) return <p className="muted">Loading…</p>;
 
-  const tasks = hub.projects.flatMap((p) => p.tasks);
-  const inFlight = tasks.filter((t) => ["queued", "planning", "assigned", "running", "validation"].includes(t.status)).length;
-  const needsYou = tasks.filter((t) => t.status === "blocked" || t.status === "waiting_for_review").length;
-  const done = tasks.filter((t) => t.status === "completed").length;
+  const count = (...statuses: string[]) => hub.projects.reduce((n, p) => n + statuses.reduce((m, s) => m + (p.counts[s] ?? 0), 0), 0);
+  const inFlight = count("queued", "planning", "assigned", "running", "validation");
+  const needsYou = count("blocked", "waiting_for_review");
+  const done = count("completed");
 
   return (
     <>

@@ -1,18 +1,12 @@
 "use client";
 import { useState } from "react";
-import { AgentDef, Project, Repo, Task, ValidationCommand, api } from "@/lib/api";
+import { AgentDef, Project, Repo, Task, api } from "@/lib/api";
 import { StatusBadge } from "@/components/ui";
 import { usePoll } from "@/lib/hooks";
-
-const toText = (v: ValidationCommand[]) => v.map((c) => `${c.kind}: ${c.command}`).join("\n");
-const fromText = (s: string): ValidationCommand[] =>
-  s.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
-    const i = l.indexOf(":");
-    return i > 0 && !l.slice(0, i).includes(" ") ? { kind: l.slice(0, i), command: l.slice(i + 1).trim(), required: true } : { kind: "test", command: l, required: true };
-  });
+import { checksFromText, checksToText } from "@/lib/parse";
 
 function ProjectEditor({ p, onSaved }: { p: Project; onSaved: () => void }) {
-  const [cmds, setCmds] = useState(toText(p.validation_commands));
+  const [cmds, setCmds] = useState(checksToText(p.validation_commands));
   const [goal, setGoal] = useState(p.description);
   const [roots, setRoots] = useState(p.allowed_roots.join("\n"));
   const [retries, setRetries] = useState(p.max_retries);
@@ -20,7 +14,7 @@ function ProjectEditor({ p, onSaved }: { p: Project; onSaved: () => void }) {
   async function save() {
     // Keep flags the text form can't show (required, timeout) for commands that were already there.
     const prev = new Map(p.validation_commands.map((c) => [c.command, c]));
-    const validation_commands = fromText(cmds).map((c) => ({ ...c, ...prev.get(c.command), kind: c.kind }));
+    const validation_commands = checksFromText(cmds).map((c) => ({ ...c, ...prev.get(c.command), kind: c.kind }));
     try {
       await api(`/projects/${p.id}`, { method: "PUT", json: { name: p.name, description: goal, allowed_roots: roots.split("\n").map((s) => s.trim()).filter(Boolean), validation_commands, max_retries: retries } });
       setMsg("Saved"); onSaved();
@@ -54,11 +48,16 @@ export default function Settings() {
   const { data: rt } = usePoll(() => api<Record<string, unknown>>("/settings"), 0);
   const [path, setPath] = useState("");
   const [err, setErr] = useState("");
+  const [deadErr, setDeadErr] = useState("");
   async function addRepo() {
     setErr("");
     try { await api("/repos", { method: "POST", json: { path } }); setPath(""); reloadRepos(); } catch (e) { setErr((e as Error).message); }
   }
-  async function retry(id: number) { await api(`/tasks/${id}/retry`, { method: "POST" }).catch(() => {}); reloadDead(); }
+  async function retry(id: number) {
+    setDeadErr("");
+    try { await api(`/tasks/${id}/retry`, { method: "POST" }); } catch (e) { setDeadErr(`#${id}: ${(e as Error).message}`); }
+    reloadDead();
+  }
   return (
     <>
       <h1 style={{ fontSize: 20 }}>Settings</h1>
@@ -74,6 +73,7 @@ export default function Settings() {
       </div>
       <div className="card">
         <h3>Dead-letter tasks</h3>
+        {deadErr && <div className="banner bad">{deadErr}</div>}
         {dead && !dead.length && <p className="muted">None.</p>}
         <table><tbody>{(dead ?? []).map((t) => (
           <tr key={t.id}><td>#{t.id}</td><td>{t.title}</td><td><StatusBadge status={t.status} /></td><td className="small">{t.error}</td><td><button onClick={() => retry(t.id)}>Retry</button></td></tr>

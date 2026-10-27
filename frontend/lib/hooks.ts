@@ -13,7 +13,7 @@ export function usePoll<T>(fn: () => Promise<T>, ms: number, deps: unknown[] = [
   useEffect(() => {
     reload();
     if (!ms) return;
-    const id = setInterval(reload, ms);
+    const id = setInterval(() => { if (!document.hidden) reload(); }, ms);  // a background tab costs nothing
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ms, reload, ...deps]);

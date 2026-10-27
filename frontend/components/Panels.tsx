@@ -1,5 +1,4 @@
 "use client";
-import { useState } from "react";
 import { AgentDef, Child, Session, Validation } from "@/lib/api";
 import { StatusBadge } from "./ui";
 
@@ -47,19 +46,21 @@ export function ValidationPanel({ results }: { results: Validation[] }) {
 }
 
 export function AgentSummary({ sessions, agents }: { sessions: Session[]; agents: AgentDef[] }) {
-  const [open, setOpen] = useState<number | null>(null);
   return (
     <>
       <table>
         <thead><tr><th>#</th><th>Agent</th><th>Attempt</th><th>Status</th><th>Files changed</th><th>Tools</th><th>Summary</th></tr></thead>
         <tbody>
           {sessions.map((s) => (
-            <tr key={s.id} className="click" onClick={() => setOpen(open === s.id ? null : s.id)}>
+            <tr key={s.id}>
               <td>{s.id}</td>
               <td>{s.agent_role}{agents.find((a) => a.role === s.agent_role)?.can_write ? "" : " (read-only)"}</td>
               <td>{s.attempt}</td><td><StatusBadge status={s.status} /></td>
               <td>{s.diff_summary.changed?.length ?? 0}</td><td>{s.tool_calls.length}</td>
-              <td className="small">{open === s.id ? <pre>{s.summary}{"\n"}{s.tool_calls.map((t) => `${t.name} ${t.input}`).join("\n")}</pre> : s.summary.slice(0, 90)}</td>
+              <td className="small">
+                <details><summary>{s.summary.slice(0, 90) || "(no summary)"}</summary>
+                  <pre>{s.summary}{"\n"}{s.tool_calls.map((t) => `${t.name} ${t.input}`).join("\n")}</pre></details>
+              </td>
             </tr>
           ))}
           {!sessions.length && <tr><td colSpan={7} className="muted">No sessions yet.</td></tr>}

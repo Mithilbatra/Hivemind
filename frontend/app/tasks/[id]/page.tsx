@@ -1,14 +1,14 @@
 "use client";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ApprovalPanel from "@/components/ApprovalPanel";
 import DiffViewer from "@/components/DiffViewer";
 import LogViewer from "@/components/LogViewer";
 import { AgentSummary, DagView, ValidationPanel } from "@/components/Panels";
 import Timeline from "@/components/Timeline";
 import { RiskBadge, StatusBadge, Tabs } from "@/components/ui";
-import { ACTIVE, AgentDef, AuditEvent, Diff, TaskDetail, Validation, api } from "@/lib/api";
+import { ACTIVE, AgentDef, AuditEvent, Diff, Session, TaskDetail, Validation, api } from "@/lib/api";
 import { ago, usePoll } from "@/lib/hooks";
 
 const TABS = ["overview", "timeline", "validation", "logs", "diff", "agents"] as const;
@@ -17,11 +17,18 @@ export default function TaskPage() {
   const id = Number(useParams().id);
   const [tab, setTab] = useState<(typeof TABS)[number]>("overview");
   const [actionErr, setActionErr] = useState("");
-  const { data: t, error, reload } = usePoll(() => api<TaskDetail>(`/tasks/${id}`), 2000, [id]);
+  const [finished, setFinished] = useState(false);
+  // A finished task no longer changes, so stop polling it; an action (retry) reloads and restarts polling.
+  const { data: t, error, reload } = usePoll(() => api<TaskDetail>(`/tasks/${id}`), finished ? 0 : 2000, [id]);
+  const terminal = !!t && ["completed", "failed", "cancelled"].includes(t.status);
+  useEffect(() => setFinished(terminal), [terminal]);
   const live = !!t && ACTIVE.includes(t.status);
+  // The rest reloads whenever the status changes, and polls only while agents are working.
   const { data: events } = usePoll(() => api<AuditEvent[]>(`/tasks/${id}/events`), tab === "timeline" || live ? 3000 : 0, [id, tab, t?.status]);
-  const { data: validation } = usePoll(() => api<Validation[]>(`/tasks/${id}/validation`), 3000, [id, t?.status]);
-  const { data: diff } = usePoll(() => api<Diff>(`/tasks/${id}/diff`), 3000, [id, t?.status]);
+  const { data: validation } = usePoll(() => api<Validation[]>(`/tasks/${id}/validation`), live ? 3000 : 0, [id, t?.status]);
+  const { data: diff } = usePoll(() => api<Diff>(`/tasks/${id}/diff`), live ? 3000 : 0, [id, t?.status]);
+  const { data: sessions } = usePoll(() => (tab === "agents" ? api<Session[]>(`/sessions?task_id=${id}`) : Promise.resolve(null)),
+    tab === "agents" && live ? 3000 : 0, [id, tab, t?.status]);
   const { data: agents } = usePoll(() => api<AgentDef[]>("/agents"), 0);
 
   async function act(path: string) {
@@ -76,7 +83,7 @@ export default function TaskPage() {
       {tab === "validation" && <ValidationPanel results={validation ?? []} />}
       {tab === "logs" && <LogViewer taskId={id} live={live} />}
       {tab === "diff" && <DiffViewer diff={diff ?? null} />}
-      {tab === "agents" && <AgentSummary sessions={t.sessions} agents={agents ?? []} />}
+      {tab === "agents" && <AgentSummary sessions={sessions ?? []} agents={agents ?? []} />}
     </>
   );
 }

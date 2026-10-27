@@ -1,17 +1,10 @@
 "use client";
 import { useMemo, useState } from "react";
 import { Diff } from "@/lib/api";
-
-function split(patch: string): { path: string; lines: string[] }[] {
-  return patch.split(/^diff --git /m).filter(Boolean).map((chunk) => {
-    const lines = chunk.split("\n");
-    const m = lines[0].match(/ b\/(.+)$/);
-    return { path: m ? m[1] : lines[0], lines };
-  });
-}
+import { splitDiff } from "@/lib/parse";
 
 export default function DiffViewer({ diff }: { diff: Diff }) {
-  const files = useMemo(() => (diff ? split(diff.patch) : []), [diff]);
+  const files = useMemo(() => (diff ? splitDiff(diff.patch) : []), [diff]);
   const [sel, setSel] = useState(0);
   if (!diff || !diff.files.length) return <p className="muted">No changes captured yet.</p>;
   const cur = files[Math.min(sel, files.length - 1)];
