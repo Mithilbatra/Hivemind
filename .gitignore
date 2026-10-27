@@ -13,3 +13,4 @@ samples/repos/
 tsconfig.tsbuildinfo
 *.egg-info/
 Icon?
+.test-build

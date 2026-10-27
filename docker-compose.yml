@@ -3,6 +3,7 @@ x-backend: &backend
   build: ./backend
   env_file: .env
   user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  restart: unless-stopped
   volumes:
     - ${REPOS_DIR:-./samples/repos}:/repos
     - orch-data:/data
@@ -13,6 +14,7 @@ x-backend: &backend
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: orchestrator
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orchestrator}
@@ -25,6 +27,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes: [redisdata:/data]
     healthcheck:
@@ -42,7 +45,11 @@ services:
 
   worker:
     <<: *backend
-    command: ["sh", "-c", "rq worker-pool hivemind -n ${WORKER_CONCURRENCY:-4} -u $${REDIS_URL}"]
+    # Agent and check processes run as the worker's user and can read its environment through /proc, so the
+    # worker gets none of the login secrets it never uses. It still needs DATABASE_URL (see README, Safety).
+    environment: { SECRET_KEY: "", ADMIN_USERNAME: "", ADMIN_PASSWORD: "", POSTGRES_PASSWORD: "" }
+    # exec: rq gets SIGTERM directly and deregisters its workers, instead of being killed and leaving stale entries
+    command: ["sh", "-c", "exec rq worker-pool hivemind -n ${WORKER_CONCURRENCY:-4} -u $${REDIS_URL}"]
     depends_on:
       api: { condition: service_healthy }
 
@@ -51,6 +58,7 @@ services:
       context: ./frontend
       args:
         API_INTERNAL_URL: http://api:8000
+    restart: unless-stopped
     ports: ["127.0.0.1:${WEB_PORT:-47213}:3000"]
     depends_on: [api]
 
