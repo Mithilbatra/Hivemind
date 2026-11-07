@@ -78,6 +78,8 @@ cd backend && python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 cd ../frontend && npm install && npm test && npm run typecheck && npm run build
 ```
 
+The same checks (plus a migration drift check, and the frontend on Node 20, 22 and 24) run in GitHub Actions on every pull request: `.github/workflows/ci.yml`.
+
 ## Key API endpoints (all under `/api`, bearer token from `POST /auth/login`)
 
 | Method | Path | Purpose |
