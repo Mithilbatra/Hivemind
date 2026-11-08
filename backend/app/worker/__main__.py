@@ -22,4 +22,5 @@ if __name__ == "__main__":
     preflight.check(admin=False)
     harden()
     # The Redis URL carries its password: hand it to rq in-process, never on a command line others can read.
-    main(["worker-pool", "hivemind", "-u", get_settings().redis_url, *sys.argv[1:]], prog_name="rq")
+    main(["worker-pool", "hivemind", "-u", get_settings().redis_url, "-w", "app.worker.queue.Worker", *sys.argv[1:]],
+         prog_name="rq")

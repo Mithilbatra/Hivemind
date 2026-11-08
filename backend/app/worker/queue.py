@@ -3,6 +3,7 @@ import uuid
 from contextlib import contextmanager
 
 import redis
+import rq
 from rq import Queue, Retry
 
 from ..config import get_settings
@@ -38,6 +39,17 @@ def set_redis(conn) -> None:
 
 def get_queue() -> Queue:
     return Queue(QUEUE_NAME, connection=get_redis())
+
+
+class Worker(rq.Worker):
+    """rq's defaults find a job whose worker died after 10-15 minutes (abandoned-job sweep every 10 min, and an idle
+    worker only gets to it between 405 s waits for work). These find it within about two minutes, and RQ retries it."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("maintenance_interval", 30)  # the abandoned-job sweep
+        kwargs.setdefault("worker_ttl", 45)  # waits for work 45 - 15 = 30 s at a time, so the sweep above runs on time
+        kwargs.setdefault("job_monitoring_interval", 10)  # a dead job's registry entry expires 10 + 60 s after its last beat
+        super().__init__(*args, **kwargs)
 
 
 def lock_key(task_id: int) -> str:
