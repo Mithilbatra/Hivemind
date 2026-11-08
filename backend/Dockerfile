@@ -9,4 +9,4 @@ RUN mkdir -p /data && chmod 777 /data
 ENV PYTHONPATH=/srv PYTHONUNBUFFERED=1 HOME=/tmp
 EXPOSE 8000
 # exec: uvicorn becomes PID 1 and gets SIGTERM, so `docker compose stop` shuts it down cleanly
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "python -m app.preflight && alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]

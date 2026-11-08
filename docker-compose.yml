@@ -2,6 +2,9 @@
 x-backend: &backend
   build: ./backend
   env_file: .env
+  environment: &backend-env
+    # Built here from REDIS_PASSWORD, so it always matches the password Redis is started with
+    REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env (make setup adds one)}@redis:6379/0
   user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
   restart: unless-stopped
   volumes:
@@ -28,10 +31,13 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    # A password, because agent code runs next to the worker and can reach this port, and RQ jobs are pickles:
+    # whoever can write to Redis can run code in the worker.
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env (make setup adds one)}"]
+    environment: { REDISCLI_AUTH: "${REDIS_PASSWORD}" }
     volumes: [redisdata:/data]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]  # without the password the answer is NOAUTH, exit 0 too
       interval: 3s
       retries: 20
 
@@ -45,11 +51,17 @@ services:
 
   worker:
     <<: *backend
-    # Agent and check processes run as the worker's user and can read its environment through /proc, so the
-    # worker gets none of the login secrets it never uses. It still needs DATABASE_URL (see README, Safety).
-    environment: { SECRET_KEY: "", ADMIN_USERNAME: "", ADMIN_PASSWORD: "", POSTGRES_PASSWORD: "" }
-    # exec: rq gets SIGTERM directly and deregisters its workers, instead of being killed and leaving stale entries
-    command: ["sh", "-c", "exec rq worker-pool hivemind -n ${WORKER_CONCURRENCY:-4} -u $${REDIS_URL}"]
+    # Agent and check processes run as the worker's user. The worker gets none of the secrets it does not use, and
+    # `python -m app.worker` makes its processes non-dumpable, so /proc/<pid>/environ is closed to those children.
+    environment:
+      <<: *backend-env
+      SECRET_KEY: ""
+      ADMIN_USERNAME: ""
+      ADMIN_PASSWORD: ""
+      POSTGRES_PASSWORD: ""
+      REDIS_PASSWORD: ""
+    # No shell and no URL on the command line: rq runs inside the python process, which gets SIGTERM directly
+    command: ["python", "-m", "app.worker", "-n", "${WORKER_CONCURRENCY:-4}"]
     depends_on:
       api: { condition: service_healthy }
 

@@ -7,9 +7,11 @@ setup:
 	  sed -e "s/^SECRET_KEY=.*/SECRET_KEY=$$(openssl rand -hex 32)/" \
 	      -e "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$$admin/" \
 	      -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$$pw/" \
+	      -e "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=$$(openssl rand -hex 16)/" \
 	      -e "s#//orchestrator:orchestrator@#//orchestrator:$$pw@#" \
 	      -e "s/^HOST_UID=.*/HOST_UID=$$(id -u)/" -e "s/^HOST_GID=.*/HOST_GID=$$(id -g)/" \
 	      .env.example > .env && echo "created .env; sign in as admin / $$admin (also in .env as ADMIN_PASSWORD)"; }
+	@grep -q '^REDIS_PASSWORD=' .env || { echo "REDIS_PASSWORD=$$(openssl rand -hex 16)" >> .env && echo "added a random REDIS_PASSWORD to .env"; }
 
 demo-repo:
 	./samples/make_demo_repo.sh

@@ -67,7 +67,7 @@ def resolve_repo_path(path: str, project_roots: list[str] | None = None) -> Path
     return p
 
 
-SECRET_ENV = {"SECRET_KEY", "DATABASE_URL", "REDIS_URL", "ADMIN_PASSWORD", "ADMIN_USERNAME", "POSTGRES_PASSWORD"}
+SECRET_ENV = {"SECRET_KEY", "DATABASE_URL", "REDIS_URL", "ADMIN_PASSWORD", "ADMIN_USERNAME", "POSTGRES_PASSWORD", "REDIS_PASSWORD"}
 
 
 def child_env(extra: dict | None = None) -> dict:

@@ -48,7 +48,8 @@ def test_empty_roots_fail_closed(env, monkeypatch):
 
 def test_child_env_strips_secrets(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "s3")
-    assert "SECRET_KEY" not in safety.child_env()
+    monkeypatch.setenv("REDIS_PASSWORD", "r3")
+    assert not {"SECRET_KEY", "REDIS_PASSWORD"} & set(safety.child_env())
 
 
 def test_checks_never_run_stale_bytecode(tmp_path):
