@@ -1,4 +1,5 @@
 import stat
+import subprocess
 import time
 
 from app import states
@@ -75,3 +76,20 @@ def test_tool_flags_appended(tmp_path, monkeypatch, env):
     policy = {"allowed": ["Read", "Edit"], "disallowed": ["Bash(rm:*)"]}
     CLIRunner().run(RunRequest("p", str(tmp_path), "writer", "task", 5, policy, lambda: False, lambda s, t: None))
     assert argv_file.read_text().strip() == "--allowedTools Read,Edit --disallowedTools Bash(rm:*)"
+
+
+def test_agent_that_leaves_a_process_running_still_succeeds(tmp_path, monkeypatch, env):
+    """The agent exited 0, but a child holding stdout made the runner wait out the deadline and report 'timeout'."""
+    setup_cli(tmp_path, monkeypatch, body="""#!/bin/sh
+cat > /dev/null
+echo '{"type":"result","result":"all done","is_error":false}'
+sleep 60 &
+echo $! > "$LEFTOVER_PID"
+""")
+    monkeypatch.setenv("LEFTOVER_PID", str(tmp_path / "pid"))
+    t0 = time.time()
+    res = CLIRunner().run(RunRequest("p", str(tmp_path), "writer", "task", 8, {}, lambda: False, lambda s, t: None))
+    assert (res.status, res.exit_code, res.summary) == ("succeeded", 0, "all done") and time.time() - t0 < 7
+    pid = (tmp_path / "pid").read_text().strip()
+    state = subprocess.run(["ps", "-o", "stat=", "-p", pid], capture_output=True, text=True).stdout.strip()
+    assert state == "" or state.startswith("Z")  # the leftover was killed (and reaped, or about to be)

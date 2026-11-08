@@ -1,4 +1,5 @@
 """Agent runners: CLIRunner shells out to AGENT_COMMAND; MockRunner is scripted for tests and demos."""
+import contextlib
 import json
 import os
 import queue
@@ -91,11 +92,17 @@ class CLIRunner:
             pass
 
         tools, final, texts, tail, kept = [], "", [], [], 0
-        deadline, open_streams, status, stopped = time.time() + req.timeout_s, 2, None, 0.0
+        deadline, open_streams, status, stopped, exited = time.time() + req.timeout_s, 2, None, 0.0, 0.0
         while open_streams or proc.poll() is None:
             if not stopped and req.should_cancel():
                 status, stopped = "cancelled", time.time()
                 _kill(proc)
+            elif not stopped and proc.poll() is not None:  # the agent is done, but something it started holds the pipes
+                exited = exited or time.time()
+                if time.time() > exited + 2:  # its output had time to drain: stop the leftovers, keep the agent's result
+                    with contextlib.suppress(ProcessLookupError):
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    stopped = time.time()
             elif not stopped and time.time() > deadline:  # also after an error result: a hung agent still times out
                 status, stopped = status or "timeout", time.time()
                 _kill(proc)
