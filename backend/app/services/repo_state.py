@@ -109,8 +109,13 @@ def snapshot(path) -> dict[str, str]:
         if status[0] in "RC":  # rename/copy: next entry is the origin path
             i += 1
         f = Path(path) / name
-        snap[name] = hashlib.sha1(f.read_bytes()).hexdigest() if f.is_file() else "deleted"
+        snap[name] = _sha1(f) if f.is_file() else "deleted"
     return snap
+
+
+def _sha1(f: Path) -> str:
+    with f.open("rb") as fh:  # streamed: a multi-GB file an agent left behind must not be read into memory
+        return hashlib.file_digest(fh, "sha1").hexdigest()
 
 
 def changed_between(before: dict[str, str], after: dict[str, str]) -> list[str]:
