@@ -98,9 +98,11 @@ def hub(db=Depends(get_db)):
                               .filter(Task.parent_id.in_([t.id for t in tops] or [0])).group_by(Task.parent_id, Task.status)):
         progress[parent]["total"] += n
         progress[parent]["done"] += n if status == "completed" else 0
-    wts = db.query(BranchWorktree).filter(BranchWorktree.active.is_(True)).all()
-    conflicts = {a.task_id for a in wts for b in wts if a.task_id != b.task_id and a.repo_id == b.repo_id
-                 and set(a.touched_files or []) & set(b.touched_files or [])}
+    editing = defaultdict(set)  # (repo, file) -> tasks with that file changed: linear, not every pair of checkouts
+    for w in db.query(BranchWorktree).filter(BranchWorktree.active.is_(True)):
+        for f in w.touched_files or []:
+            editing[w.repo_id, f].add(w.task_id)
+    conflicts = set().union(*(tasks for tasks in editing.values() if len(tasks) > 1))
     working = {c["top_task_id"]: c for c in active}
     boards = defaultdict(list)
     for t in tops:

@@ -2,8 +2,8 @@ from fastapi.testclient import TestClient
 
 from app.api.hub import describe
 from app.main import create_app
-from app.models import AgentSession, OutputLog
-from app.services.tasks import create_tasks
+from app.models import AgentSession, BranchWorktree, OutputLog
+from app.services.tasks import create_tasks, register_repo
 from app.worker import queue
 
 
@@ -66,3 +66,16 @@ def test_decision_while_worker_holds_task_is_refused(env, db, repo):
             r = c.post(f"/api/tasks/{t['id']}/approval", json={"action": "approve"})
             assert r.status_code == 409 and "busy" in r.json()["detail"]
         assert c.post(f"/api/tasks/{t['id']}/approval", json={"action": "approve"}).json()["status"] == "completed"
+
+
+def test_overlap_flags_tasks_changing_the_same_file_in_the_same_repo(env, db, repo, project, make_repo):
+    other = register_repo(db, str(make_repo("other")), project)
+    a, b, c, d = (create_tasks(db, title=n, repo_ids=[r.id])[0] for n, r in (("a", repo), ("b", repo), ("c", repo), ("d", other)))
+    for t, files in ((a, ["x.py", "y.py"]), (b, ["y.py"]), (c, ["z.py"]), (d, ["x.py"])):
+        db.add(BranchWorktree(task_id=t.id, repo_id=t.repo_id, branch=f"b{t.id}", base_sha="0" * 40, path=f"/w/{t.id}",
+                              touched_files=files))
+    db.commit()
+    with TestClient(create_app()) as cl:
+        login(cl)
+        flags = {t["id"]: t["conflict"] for p in cl.get("/api/hub").json()["projects"] for t in p["tasks"]}
+    assert [flags[t.id] for t in (a, b, c, d)] == [True, True, False, False]  # d: same file, other repo
