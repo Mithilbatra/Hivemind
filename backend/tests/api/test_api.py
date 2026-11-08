@@ -143,6 +143,17 @@ def test_health_endpoints(client):
     assert w["queued"] == 0 and w["workers"] == []
 
 
+def test_ready_names_what_is_down_but_not_the_error(client, monkeypatch):
+    from app.worker import queue
+
+    class Down:
+        def ping(self):
+            raise ConnectionError("connecting to redis://:hunter2@redis:6379 failed")
+    monkeypatch.setattr(queue, "get_redis", lambda: Down())
+    r = client.get("/api/health/ready")  # no login on this endpoint: the error text stays in the log
+    assert r.status_code == 503 and r.json()["detail"] == "not ready: redis unreachable"
+
+
 def test_admin_password_follows_env_on_restart(env, monkeypatch):
     from app.config import get_settings
     from app.main import bootstrap

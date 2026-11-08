@@ -1,3 +1,5 @@
+import logging
+
 import redis
 from fastapi import APIRouter, Depends, HTTPException, Query
 from rq import Worker
@@ -19,6 +21,7 @@ router = APIRouter(dependencies=[Depends(current_user)])
 
 
 MAX_LOGIN_FAILURES, LOGIN_LOCKOUT_S = 10, 900
+log = logging.getLogger("hivemind.api")
 
 
 @public.post("/auth/login")
@@ -46,11 +49,12 @@ def health():
 
 @public.get("/health/ready")
 def ready(db=Depends(get_db)):
-    try:
-        db.execute(text("select 1"))
-        queue.get_redis().ping()
-    except Exception as e:
-        raise HTTPException(503, f"not ready: {e}")
+    for name, probe in (("database", lambda: db.execute(text("select 1"))), ("redis", lambda: queue.get_redis().ping())):
+        try:
+            probe()
+        except Exception:  # no login here: the detail (hosts, users) goes to the log, not to the caller
+            log.exception("readiness: %s check failed", name)
+            raise HTTPException(503, f"not ready: {name} unreachable") from None
     return {"status": "ready"}
 
 
