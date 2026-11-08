@@ -105,7 +105,7 @@ def test_symlinks_in_repo_never_reach_the_prompt(db, project, make_repo, tmp_pat
     repo = register_repo(db, str(p), project)
     ctx = context.build_context(repo.path, repo_state.head_sha(repo.path))
     assert "TOP-SECRET" not in context.render(ctx)
-    picked = prompts.select_relevant_files(repo.path, ctx["tree"], "update the latest notes")
+    picked = prompts.select_relevant_files(repo.path, repo_state.files_at(repo.path, "HEAD"), "update the latest notes")
     assert not any("TOP-SECRET" in c for _, c in picked)
 
 

@@ -50,6 +50,11 @@ def head_sha(path) -> str:
     return git(path, "rev-parse", "HEAD").strip()
 
 
+def files_at(path, sha: str) -> list[str]:
+    """Every file path in commit `sha`."""
+    return [f for f in git(path, "ls-tree", "-r", "--name-only", "-z", sha).split("\0") if f]
+
+
 def resolve_ref(path, ref: str) -> str | None:
     """Commit sha for a branch/tag/sha, or None. `--end-of-options` stops a ref like '--foo' being read as a flag."""
     out = git(path, "rev-parse", "--verify", "-q", "--end-of-options", ref + "^{commit}", check=False).strip()

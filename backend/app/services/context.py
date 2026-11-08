@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy.exc import IntegrityError
 
 from ..models import RepoContext
-from .repo_state import git, head_sha
+from .repo_state import files_at, git, head_sha
 
 MANIFESTS = ["package.json", "pyproject.toml", "requirements.txt", "setup.py", "go.mod", "Cargo.toml", "pom.xml",
              "build.gradle", "Makefile", "docker-compose.yml", "Dockerfile", "tsconfig.json", "pytest.ini", "tox.ini",
@@ -28,7 +28,7 @@ def build_context(repo_path, sha: str) -> dict:
     """Describe commit `sha` from git objects: the task's real base, no uncommitted edits, symlinks never followed
     (`git show` of a symlink gives its target path, not the target's content)."""
     root = Path(repo_path)
-    files = [f for f in git(root, "ls-tree", "-r", "--name-only", "-z", sha).split("\0") if f]
+    files = files_at(root, sha)
     present = set(files)
 
     def blob(rel: str, limit: int) -> str:
@@ -60,7 +60,6 @@ def build_context(repo_path, sha: str) -> dict:
         "frameworks": [f for f in FRAMEWORKS if re.search(rf"\b{f}\b", text)],
         "modules": modules,
         "root_files": sorted(f for f in tops.get(".", []))[:40],
-        "tree": files[:5000],  # only used to pick relevant files, never rendered into a prompt whole
         "manifests": manifests,
         "npm_scripts": scripts,
         "tests": [f for f in files if TEST_RE.search(f)][:60],

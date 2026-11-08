@@ -179,7 +179,8 @@ def _start(db, top, repo, project):
 
 def _session_prompt(db, top, repo, bw, ctx, agent, task, kind, project, failure="", feedback="", prior=None):
     checks = validation.effective_checks(top, project, ctx)
-    files = prompts.select_relevant_files(bw.path, ctx.get("tree", []), f"{task.title} {task.description}")
+    # the whole tree, listed now: the cached context kept only the first 5000 paths, so later ones were never picked
+    files = prompts.select_relevant_files(bw.path, repo_state.files_at(bw.path, bw.base_sha), f"{task.title} {task.description}")
     return prompts.build_prompt(agent=agent, task=task, top=top, repo_text=context.render(ctx), files=files,
                                 validation=checks, kind=kind, failure=failure, feedback=feedback, prior=prior,
                                 project_goal=project.description, team=team_lines(db, top))

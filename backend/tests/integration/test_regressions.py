@@ -305,3 +305,15 @@ def test_a_checkout_git_no_longer_knows_is_rebuilt_on_retry(db, repo):
     queue.enqueue_task(t.id)
     db.refresh(t)
     assert t.status == states.REVIEW and repo_state.is_checkout(bw.path)
+
+
+def test_relevant_files_come_from_the_whole_repo(db, project, make_repo):
+    """Only the first 5000 paths were considered, so in a bigger repo later directories were never picked."""
+    from app.services.tasks import register_repo
+    files = {f"aaa/filler_{i:04d}.txt": "x\n" for i in range(5001)}
+    files["zzz/billing_report.py"] = "def billing_report():\n    return 0\n"
+    big = register_repo(db, str(make_repo("big", files)), project)
+    t = create_tasks(db, title="Fix the billing report", repo_ids=[big.id])[0]
+    queue.enqueue_task(t.id)
+    writer = db.query(Task).filter_by(parent_id=t.id, role="writer").one()
+    assert "zzz/billing_report.py" in db.query(Prompt).filter_by(task_id=writer.id).one().text
