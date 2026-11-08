@@ -14,3 +14,5 @@ tsconfig.tsbuildinfo
 *.egg-info/
 Icon?
 .test-build
+# Conflict copies a synced folder (iCloud Desktop/Documents) makes: "name 2.py"
+* [2-9].*

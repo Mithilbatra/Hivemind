@@ -32,7 +32,7 @@ Screenshots use the built-in demo agent (`AGENT_MODE=mock`), which is why every 
 
 ## Run it
 
-Requires Docker with Compose v2.
+Requires Docker with Compose v2. Keep the project out of a synced folder (iCloud Desktop & Documents, Dropbox): sync makes "name 2.ext" copies of files, which pytest collects and `git add` picks up, and it can damage `.git`. Moving the folder is safe; the Docker volumes keep their names.
 
 ```bash
 make up          # first run writes .env (random secrets and admin password, your user id), creates samples/repos/demo-app, starts everything

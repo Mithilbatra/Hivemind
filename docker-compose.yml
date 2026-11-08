@@ -1,4 +1,7 @@
 # Hivemind: everything needed to run locally: `make up` (or `docker compose up --build`).
+# Volumes are named after the project, which would otherwise follow the folder's name: pinned, so moving or renaming
+# the folder keeps the same database instead of silently starting an empty one.
+name: orchestrator
 x-backend: &backend
   build: ./backend
   env_file: .env
