@@ -38,7 +38,7 @@ Requires Docker with Compose v2. Keep the project out of a synced folder (iCloud
 make up          # first run writes .env (random secrets and admin password, your user id), creates samples/repos/demo-app, starts everything
 ```
 
-Open http://localhost:47213 and sign in as `admin` with the password `make setup` printed (it is `ADMIN_PASSWORD` in `.env`; change it there and restart the API to rotate it). API docs: http://localhost:8000/docs. Both ports listen on 127.0.0.1 only, and both refuse requests whose `Host` is not localhost (a guard against DNS rebinding; set `ALLOWED_HOSTS` for the API if you put it behind another name). Ten failed logins for a user lock that user out for 15 minutes.
+Open http://localhost:47213 and sign in as `admin` with the password `make setup` printed (it is `ADMIN_PASSWORD` in `.env`; change it there and restart the API to rotate it). API docs: http://localhost:8000/docs. Both ports listen on 127.0.0.1 only, and both refuse requests whose `Host` is not localhost (a guard against DNS rebinding; set `ALLOWED_HOSTS` for the API if you put it behind another name). Ten failed logins for a user from one address lock that address out for 15 minutes (counted per address, so code an agent runs in the worker cannot lock you out of the UI).
 
 The home page is **the Hive**: a honeycomb showing which agents are working, plus one card per agent role (planner, researcher, writer, tester, reviewer) showing what each is working on right now and what its last output line says, a board per project (queued, agents working, needs you, done, stopped) and a live activity feed. Up to `WORKER_CONCURRENCY` tasks (default 4) run at the same time, so several agents work in parallel.
 

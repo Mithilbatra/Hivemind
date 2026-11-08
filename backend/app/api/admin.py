@@ -2,7 +2,7 @@ import logging
 import shutil
 
 import redis
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from rq import Worker
 from rq.registry import FailedJobRegistry
 from sqlalchemy import text
@@ -26,8 +26,9 @@ log = logging.getLogger("hivemind.api")
 
 
 @public.post("/auth/login")
-def login(body: Login, db=Depends(get_db)):
-    key = f"hivemind:login-fail:{body.username}"
+def login(body: Login, request: Request, db=Depends(get_db)):
+    # Counted per source address: code an agent runs in the worker could otherwise lock the admin out of the UI
+    key = f"hivemind:login-fail:{body.username}:{request.client.host if request.client else ''}"
     conn = queue.get_redis()
     try:
         if int(conn.get(key) or 0) >= MAX_LOGIN_FAILURES:

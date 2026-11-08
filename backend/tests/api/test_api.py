@@ -183,3 +183,13 @@ def test_password_hashes_use_the_stronger_cost_and_old_ones_are_upgraded(env, db
     bootstrap()  # the next start re-hashes it with the current cost
     db.refresh(admin)
     assert not outdated(admin.password_hash) and verify_password("pw", admin.password_hash)
+
+
+def test_failed_logins_from_one_address_do_not_lock_out_another(env, db):
+    """The lockout counted per username only: ten bad guesses from agent code in the worker locked the admin out."""
+    app = create_app()
+    with TestClient(app, client=("172.20.0.7", 40000)) as worker, TestClient(app, client=("172.20.0.5", 40000)) as web:
+        for _ in range(10):
+            assert worker.post("/api/auth/login", json={"username": "admin", "password": "guess"}).status_code == 401
+        assert worker.post("/api/auth/login", json={"username": "admin", "password": "pw"}).status_code == 429
+        assert web.post("/api/auth/login", json={"username": "admin", "password": "pw"}).status_code == 200
