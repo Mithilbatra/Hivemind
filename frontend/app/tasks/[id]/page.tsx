@@ -52,7 +52,9 @@ export default function TaskPage() {
         <span style={{ flex: 1 }} />
         {["queued", "blocked"].includes(t.status) && <button onClick={() => act("run")}>Run</button>}
         {["failed", "cancelled"].includes(t.status) && <button className="primary" onClick={() => act("retry")}>Retry</button>}
-        {!["completed", "failed", "cancelled"].includes(t.status) && <button className="danger" onClick={() => act("cancel")}>Cancel</button>}
+        {(t.status === "failed" ? !!t.worktree?.active : !terminal) && (
+          <button className="danger" onClick={() => act("cancel")}>{t.status === "failed" ? "Discard checkout" : "Cancel"}</button>
+        )}
       </div>
       <p className="muted small">
         {t.repo_name} · {t.worktree ? `branch ${t.worktree.branch}${t.worktree.commit_sha ? ` @ ${t.worktree.commit_sha.slice(0, 8)}` : ""}` : "no branch yet"} · priority {t.priority} · created {ago(t.created_at)} by {t.created_by}

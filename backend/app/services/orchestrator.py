@@ -90,13 +90,13 @@ def advance(db, task_id: int) -> Task:
 
 def cancel_now(db, top, reason: str, actor: str = "system") -> None:
     """Terminal cancel: children, worktree and branch are cleaned up. The diff stays in the DB."""
-    if top.status in states.TERMINAL:
+    if top.status in (states.COMPLETED, states.CANCELLED):
         return
     close_stale_sessions(db, top.id, "task cancelled")
     for c in children_of(db, top):
         if c.status not in states.TERMINAL:
             transition(db, c, states.CANCELLED, reason, actor)
-    top.cancel_requested = True
+    top.cancel_requested, top.dead_letter = True, False  # a discarded failure no longer needs attention
     transition(db, top, states.CANCELLED, reason, actor)
     release(db, top, delete_branch=True)
 

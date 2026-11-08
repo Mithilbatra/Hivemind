@@ -198,3 +198,21 @@ def test_session_log_is_capped_in_the_database_but_whole_on_disk(db, repo, monke
     assert rows[-1].startswith("[log truncated here") and "line 39" not in "".join(rows)
     full = client().get(f"/api/tasks/{t.id}/sessions/{sess.id}/log").text
     assert "line 00" in full and "line 39" in full
+
+
+def test_a_failed_tasks_checkout_can_be_discarded_and_the_task_retried(db, repo):
+    """A failed task kept its checkout for Retry and Force commit, but nothing could ever free it: cancel refused
+    finished tasks. Discarding it frees the disk, keeps the task's history, and Retry still works."""
+    runner_mod.set_runner(MockRunner(bad_writer))
+    c = client()
+    t = c.post("/api/tasks", json={"title": "Add feature", "repo_ids": [repo.id]}).json()[0]
+    bw = db.query(BranchWorktree).filter_by(task_id=t["id"]).one()
+    assert t["status"] == "failed" and bw.active and Path(bw.path).is_dir()
+    assert c.get("/api/settings").json()["checkouts"]["on_disk"] == 1
+    assert c.post(f"/api/tasks/{t['id']}/cancel").json()["status"] == "cancelled"
+    db.refresh(bw)
+    assert not bw.active and not Path(bw.path).exists() and repo_state.resolve_ref(repo.path, bw.branch) is None
+    assert c.get("/api/settings").json()["checkouts"]["on_disk"] == 0
+    assert t["id"] not in [x["id"] for x in c.get("/api/dead-letter").json()]
+    runner_mod.set_runner(MockRunner(default_mock))
+    assert c.post(f"/api/tasks/{t['id']}/retry").json()["status"] == "waiting_for_review"

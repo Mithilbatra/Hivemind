@@ -1,4 +1,5 @@
 import logging
+import shutil
 
 import redis
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from ..auth import create_user_session, current_user
 from ..config import get_settings
 from ..db import get_db
-from ..models import Agent, AgentSession, Project, Repository, Task
+from ..models import Agent, AgentSession, BranchWorktree, Project, Repository, Task
 from ..schemas import AgentOut, Login, ProjectIn, ProjectOut, RepoIn, RepoOut, SessionOut, TaskOut
 from ..services import context, safety
 from ..services import tasks as svc
@@ -161,9 +162,12 @@ def dead_letter(db=Depends(get_db)):
 
 
 @router.get("/settings")
-def runtime_settings():
+def runtime_settings(db=Depends(get_db)):
     s = get_settings()
-    return {"agent_mode": s.agent_mode, "agent_command": s.agent_command, "allowed_repo_roots": s.repo_roots and
+    disk = shutil.disk_usage(s.worktrees_dir) if s.worktrees_dir.exists() else None
+    return {"checkouts": {"on_disk": db.query(BranchWorktree).filter_by(active=True).count(),  # each one a copy of a repo
+                          "disk_free_gb": round(disk.free / 1e9, 1) if disk else None},
+            "agent_mode": s.agent_mode, "agent_command": s.agent_command, "allowed_repo_roots": s.repo_roots and
             [str(r) for r in s.repo_roots], "session_timeout_s": s.session_timeout_s,
             "validation_timeout_s": s.validation_timeout_s, "default_max_retries": s.max_retries,
             "retry_backoff_s": s.retry_backoff_s, "command_allowlist": sorted(safety.ALLOWED_EXECUTABLES)}

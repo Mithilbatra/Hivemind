@@ -15,7 +15,7 @@ ALLOWED: dict[str, set[str]] = {
     VALIDATION: {RUNNING, REVIEW, CANCELLED, FAILED},
     BLOCKED: {ASSIGNED, QUEUED, CANCELLED, FAILED},
     REVIEW: {COMPLETED, RUNNING, CANCELLED, FAILED},
-    FAILED: {QUEUED, COMPLETED},  # retry, or force_commit
+    FAILED: {QUEUED, COMPLETED, CANCELLED},  # retry, force_commit, or discard (frees its checkout)
     CANCELLED: {QUEUED},
     COMPLETED: set(),
 }

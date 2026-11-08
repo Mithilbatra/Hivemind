@@ -93,12 +93,12 @@ def request_cancel(db, task: Task, actor: str = "system") -> Task:
     """Cancel now if no worker holds the task; otherwise flag it and the worker stops at its next poll."""
     if task.parent_id is not None:
         raise BadRequest("cancel the top-level task")
-    if task.status in states.TERMINAL:
+    if task.status in (states.COMPLETED, states.CANCELLED):  # a failed one can be discarded, freeing its checkout
         raise BadRequest(f"task is already {task.status}")
     try:
         with queue.task_lock(task.id):
             db.refresh(task)
-            if task.status in states.TERMINAL:
+            if task.status in (states.COMPLETED, states.CANCELLED):
                 raise BadRequest(f"task is already {task.status}")
             emit(db, task.id, "cancel_requested", "", actor=actor)
             orchestrator.cancel_now(db, task, "cancelled by user", actor)
