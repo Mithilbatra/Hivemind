@@ -1,3 +1,4 @@
+import redis
 from fastapi import APIRouter, Depends, HTTPException, Query
 from rq import Worker
 from rq.registry import FailedJobRegistry
@@ -24,14 +25,17 @@ MAX_LOGIN_FAILURES, LOGIN_LOCKOUT_S = 10, 900
 def login(body: Login, db=Depends(get_db)):
     key = f"hivemind:login-fail:{body.username}"
     conn = queue.get_redis()
-    if int(conn.get(key) or 0) >= MAX_LOGIN_FAILURES:
-        raise HTTPException(429, "too many failed logins; try again in 15 minutes")
-    token = create_user_session(db, body.username, body.password)
-    if token is None:
-        conn.incr(key)
-        conn.expire(key, LOGIN_LOCKOUT_S)
-        raise HTTPException(401, "bad credentials")
-    conn.delete(key)
+    try:
+        if int(conn.get(key) or 0) >= MAX_LOGIN_FAILURES:
+            raise HTTPException(429, "too many failed logins; try again in 15 minutes")
+        token = create_user_session(db, body.username, body.password)
+        if token is None:
+            conn.incr(key)
+            conn.expire(key, LOGIN_LOCKOUT_S)
+            raise HTTPException(401, "bad credentials")
+        conn.delete(key)
+    except redis.RedisError:  # no failed-login counter: refuse, rather than allow unlimited guesses
+        raise HTTPException(503, "sign-in is unavailable: Redis (which counts failed logins) cannot be reached") from None
     return {"token": token, "username": body.username}
 
 

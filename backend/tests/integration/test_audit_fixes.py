@@ -354,3 +354,17 @@ def test_bad_input_is_a_4xx_not_a_500(db, repo):
                 "/api/sessions?limit=-1", "/api/sessions?limit=100000"):  # negative LIMIT/OFFSET was a database error
         assert c.get(url).status_code == 422, url
     assert c.get("/api/sessions?limit=500").status_code == 200
+
+
+def test_sign_in_with_redis_down_is_a_clear_503(db, monkeypatch):
+    import redis
+
+    class Down:
+        def __getattr__(self, name):
+            def fail(*args, **kwargs):
+                raise redis.ConnectionError("Error 111 connecting to redis:6379. Connection refused.")
+            return fail
+    with TestClient(create_app()) as c:
+        monkeypatch.setattr(queue, "get_redis", lambda: Down())
+        r = c.post("/api/auth/login", json={"username": "admin", "password": "pw"})
+    assert r.status_code == 503 and "Redis" in r.json()["detail"]
