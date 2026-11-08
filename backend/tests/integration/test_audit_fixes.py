@@ -332,3 +332,14 @@ def test_pre_run_reject_leaves_nothing_behind(db, repo):
     assert t.status == states.CANCELLED
     assert db.query(Approval).filter_by(task_id=t.id, status="rejected").count() == 1
     assert db.query(Task).filter_by(parent_id=t.id).count() == 0
+
+
+def test_bad_input_is_a_4xx_not_a_500(db, repo):
+    t = submit(db, repo)
+    c = client()
+    # a non-ASCII token made hmac.compare_digest raise TypeError
+    assert c.get("/api/tasks", headers={"Authorization": "Bearer x.\xe9".encode("latin-1")}).status_code == 401
+    for url in ("/api/tasks?limit=-1", f"/api/tasks/{t.id}/logs?offset=-1", f"/api/tasks/{t.id}/logs?limit=-1",
+                "/api/sessions?limit=-1", "/api/sessions?limit=100000"):  # negative LIMIT/OFFSET was a database error
+        assert c.get(url).status_code == 422, url
+    assert c.get("/api/sessions?limit=500").status_code == 200
