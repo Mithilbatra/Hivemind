@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from rq import Worker
 from rq.registry import FailedJobRegistry
 from sqlalchemy import text
@@ -140,7 +140,7 @@ def agents(db=Depends(get_db)):
 
 
 @router.get("/sessions", response_model=list[SessionOut])
-def sessions(task_id: int | None = None, limit: int = 100, db=Depends(get_db)):
+def sessions(task_id: int | None = None, limit: int = Query(100, ge=0, le=500), db=Depends(get_db)):
     q = db.query(AgentSession)
     if task_id:
         q = q.filter(AgentSession.top_task_id == task_id)

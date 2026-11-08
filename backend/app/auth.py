@@ -39,7 +39,7 @@ def read_token(token: str) -> str | None:
             return None
         data = json.loads(base64.urlsafe_b64decode(body))
         return data["u"] if data["exp"] > time.time() else None
-    except (ValueError, KeyError):
+    except (ValueError, KeyError, TypeError):  # TypeError: compare_digest refuses a non-ASCII signature
         return None
 
 

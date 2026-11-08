@@ -88,7 +88,7 @@ def create(body: TaskCreate, db=Depends(get_db), user=Depends(current_user)):
 
 @router.get("", response_model=list[TaskOut])
 def list_tasks(status: str | None = None, repo_id: int | None = None, q: str | None = None,
-               limit: int = Query(100, le=500), db=Depends(get_db)):
+               limit: int = Query(100, ge=0, le=500), db=Depends(get_db)):
     qs = db.query(Task).filter(Task.parent_id.is_(None))
     if status:
         qs = qs.filter(Task.status == status)
@@ -200,7 +200,8 @@ def approval(task_id: int, body: ApprovalIn, db=Depends(get_db), user=Depends(cu
 
 
 @router.get("/{task_id}/logs")
-def logs(task_id: int, session_id: int | None = None, offset: int = 0, limit: int = Query(500, le=2000), db=Depends(get_db)):
+def logs(task_id: int, session_id: int | None = None, offset: int = Query(0, ge=0), limit: int = Query(500, ge=0, le=2000),
+         db=Depends(get_db)):
     t = _top(db, task_id)
     sessions = db.query(AgentSession).filter_by(top_task_id=t.id).order_by(AgentSession.id).all()
     ids = [s.id for s in sessions if session_id in (None, s.id)]

@@ -53,3 +53,11 @@ def test_worker_processes_are_not_dumpable():
     r = worker("-c", "import ctypes; from app.worker.__main__ import harden; harden(); "
                      "print(ctypes.CDLL(None).prctl(3, 0, 0, 0, 0))")  # 3 = PR_GET_DUMPABLE
     assert r.stdout.strip() == "0", r.stderr
+
+
+def test_worker_finds_a_dead_workers_job_within_about_two_minutes():
+    import fakeredis
+
+    from app.worker.queue import Worker
+    w = Worker(["hivemind"], connection=fakeredis.FakeStrictRedis())
+    assert (w.maintenance_interval, w.dequeue_timeout, w.job_monitoring_interval) == (30, 30, 10)

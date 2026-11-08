@@ -343,3 +343,14 @@ def test_renaming_the_admin_retires_the_old_account(db, monkeypatch):
         assert c.post("/api/auth/login", json={"username": "admin", "password": "pw"}).status_code == 401
         assert c.get("/api/tasks", headers={"Authorization": f"Bearer {old_token}"}).status_code == 401
         assert c.post("/api/auth/login", json={"username": "root", "password": "pw"}).status_code == 200
+
+
+def test_bad_input_is_a_4xx_not_a_500(db, repo):
+    t = submit(db, repo)
+    c = client()
+    # a non-ASCII token made hmac.compare_digest raise TypeError
+    assert c.get("/api/tasks", headers={"Authorization": "Bearer x.\xe9".encode("latin-1")}).status_code == 401
+    for url in ("/api/tasks?limit=-1", f"/api/tasks/{t.id}/logs?offset=-1", f"/api/tasks/{t.id}/logs?limit=-1",
+                "/api/sessions?limit=-1", "/api/sessions?limit=100000"):  # negative LIMIT/OFFSET was a database error
+        assert c.get(url).status_code == 422, url
+    assert c.get("/api/sessions?limit=500").status_code == 200
