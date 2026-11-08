@@ -56,10 +56,16 @@ def resolve_ref(path, ref: str) -> str | None:
     return out or None
 
 
+def is_checkout(path) -> bool:
+    """A directory alone is not a checkout: after `git worktree prune` on the host, git no longer knows it."""
+    p = Path(path)
+    return p.is_dir() and git(p, "rev-parse", "--show-toplevel", check=False).strip() == str(p.resolve())
+
+
 def create_worktree(db, task, repo) -> BranchWorktree:
     """Idempotently create an isolated worktree + branch for a top-level task."""
     bw = db.query(BranchWorktree).filter_by(task_id=task.id).one_or_none()
-    if bw and Path(bw.path).exists():
+    if bw and is_checkout(bw.path):
         return bw
     base_ref = task.branch_target or repo.default_branch
     base_sha = resolve_ref(repo.path, base_ref)

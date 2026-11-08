@@ -284,3 +284,22 @@ def test_a_worker_that_lost_its_lock_stops_writing(db, repo):
     queue.enqueue_task(t.id)
     db.refresh(t)
     assert t.status == states.REVIEW  # and the task resumes from what was saved
+
+
+def test_a_checkout_git_no_longer_knows_is_rebuilt_on_retry(db, repo):
+    """After `git worktree prune` on the host, the checkout directory remained, so it was reused: every git call in it
+    failed, and retrying did the same again, forever."""
+    import shutil
+    t = submit(db, repo)
+    bw = db.query(BranchWorktree).filter_by(task_id=t.id).one()
+    shutil.rmtree(Path(repo.path, ".git", "worktrees", Path(bw.path).name))  # what a host-side prune removes
+    assert Path(bw.path).is_dir() and not repo_state.is_checkout(bw.path)
+    with pytest.raises(BadRequest, match="gone or broken"):
+        review.decide(db, t, "approve", "me")
+    t.status = states.FAILED  # where the git errors leave it
+    db.commit()
+    from app.services.tasks import reset_for_retry
+    reset_for_retry(db, t)
+    queue.enqueue_task(t.id)
+    db.refresh(t)
+    assert t.status == states.REVIEW and repo_state.is_checkout(bw.path)

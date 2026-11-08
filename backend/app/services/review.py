@@ -1,6 +1,5 @@
 """Human approval decisions."""
 from datetime import UTC, datetime
-from pathlib import Path
 
 from .. import states
 from ..models import Approval, BranchWorktree, Diff, Repository, Task
@@ -80,8 +79,8 @@ def decide(db, task: Task, action: str, user: str, reason: str = "", confirm: bo
 
 def _worktree(db, task) -> BranchWorktree:
     bw = db.query(BranchWorktree).filter_by(task_id=task.id).one_or_none()
-    if bw is None or not bw.active or not Path(bw.path).exists():
-        raise BadRequest("the task's checkout is gone, so there is nothing to commit; retry the task")
+    if bw is None or not bw.active or not repo_state.is_checkout(bw.path):
+        raise BadRequest("the task's checkout is gone or broken, so there is nothing to commit; retry the task")
     return bw
 
 

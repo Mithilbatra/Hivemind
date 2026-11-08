@@ -9,7 +9,7 @@ from ..states import transition
 from ..worker import queue
 from . import orchestrator, safety
 from .audit import emit
-from .repo_state import git, resolve_ref
+from .repo_state import git, is_checkout, resolve_ref
 
 PRIORITIES = ("low", "normal", "high", "urgent")
 RISKS = ("low", "medium", "high", "critical")
@@ -113,7 +113,7 @@ def reset_for_retry(db, task: Task, actor: str = "system") -> Task:
     if task.parent_id is not None or task.status not in (states.FAILED, states.CANCELLED):
         raise BadRequest("only failed or cancelled top-level tasks can be retried")
     bw = db.query(BranchWorktree).filter_by(task_id=task.id).one_or_none()
-    lost = bw is None or not bw.active or not Path(bw.path).exists()
+    lost = bw is None or not bw.active or not is_checkout(bw.path)  # every step re-runs on a new checkout
     for c in orchestrator.children_of(db, task):
         if lost or c.status in (states.FAILED, states.CANCELLED):
             c.status, c.retry_count, c.error, c.finished_at = states.QUEUED, 0, None, None
