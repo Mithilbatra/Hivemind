@@ -74,5 +74,7 @@ def child_env(extra: dict | None = None) -> dict:
     """Environment for subprocesses: ours minus Hivemind's own secrets."""
     env = {k: v for k, v in os.environ.items() if k not in SECRET_ENV}
     env["GIT_TERMINAL_PROMPT"] = "0"
+    # .pyc files are checked by size and whole-second mtime, so a same-size fix made within a second ran the old code
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     env.update(extra or {})
     return env

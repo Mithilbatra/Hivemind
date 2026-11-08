@@ -49,3 +49,20 @@ def test_empty_roots_fail_closed(env, monkeypatch):
 def test_child_env_strips_secrets(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "s3")
     assert "SECRET_KEY" not in safety.child_env()
+
+
+def test_checks_never_run_stale_bytecode(tmp_path):
+    """A same-size edit with the same whole-second mtime used to be hidden by the .pyc of the previous run."""
+    import os
+    import sys
+
+    from app.services.validation import run_cmd
+    src = tmp_path / "mod.py"
+    src.write_text("VALUE = 0\n")
+    show = [sys.executable, "-c", "import mod; print(mod.VALUE)"]
+    assert run_cmd(show, str(tmp_path), 30) == (0, "0\n")
+    st = src.stat()
+    src.write_text("VALUE = 1\n")
+    os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns))  # what a fast agent produces: same size, same second
+    assert run_cmd(show, str(tmp_path), 30) == (0, "1\n")
+    assert not (tmp_path / "__pycache__").exists()  # and no bytecode lands in the worktree or its diff
