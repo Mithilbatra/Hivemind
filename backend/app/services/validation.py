@@ -1,4 +1,5 @@
 """Run configured checks (allowlisted, no shell) and store results."""
+import codecs
 import contextlib
 import os
 import signal
@@ -30,25 +31,29 @@ def effective_checks(top, project, ctx: dict) -> list[dict]:
 
 def run_cmd(argv: list[str], cwd: str, timeout: int) -> tuple[int | None, str]:
     try:
-        p = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                             errors="replace", env=child_env(), start_new_session=True)
+        p = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=child_env(),
+                             start_new_session=True)
     except OSError as e:
         return None, f"{CANNOT_RUN} {argv[0]}: {e}"
     tail: deque[str] = deque(maxlen=TAIL)  # only the end is kept: a test stuck printing can't fill memory
+    decode = codecs.getincrementaldecoder("utf-8")(errors="replace").decode
 
     def read():
-        for chunk in iter(lambda: p.stdout.read(65536), ""):
-            tail.extend(chunk)
+        # read1 returns what is there now; read(n) waited for n chars, so a leftover process holding the pipe
+        # used to swallow the whole output
+        for chunk in iter(lambda: p.stdout.read1(65536), b""):
+            tail.extend(decode(chunk))
+        tail.extend(decode(b"", True))
 
     reader = threading.Thread(target=read, daemon=True)
     reader.start()
     try:
         code = p.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        with contextlib.suppress(ProcessLookupError):  # it may exit on its own between the timeout and the kill
-            os.killpg(p.pid, signal.SIGKILL)
-        p.wait()
         code = None
+    with contextlib.suppress(ProcessLookupError):  # whatever the check left running in its group goes too
+        os.killpg(p.pid, signal.SIGKILL)
+    p.wait()
     reader.join(timeout=5)
     out = "".join(tail)
     return code, out if code is not None else out + f"\n[timed out after {timeout}s]"

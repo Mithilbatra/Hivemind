@@ -237,3 +237,28 @@ def test_a_write_after_the_check_stays_out_of_the_commit(db, repo, monkeypatch):
     assert t.status == states.COMPLETED
     files = repo_state.git(repo.path, "ls-tree", "-r", "--name-only", bw.branch).split()
     assert "mock_feature.py" in files and "late.txt" not in files
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    stat = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+    return bool(stat) and not stat.startswith("Z")  # a killed process waiting to be reaped counts as gone
+
+
+def test_check_output_survives_a_leftover_process_which_is_then_killed(tmp_path):
+    """read(65536) waited for EOF, so a server a test left running swallowed the output, and kept running."""
+    import time
+    pidfile = tmp_path / "pid"
+    t0 = time.time()
+    code, out = validation.run_cmd(["sh", "-c", f"echo before; sleep 60 & echo $! > {pidfile}; echo after; exit 1"],
+                                   str(tmp_path), 30)
+    assert (code, out) == (1, "before\nafter\n") and time.time() - t0 < 4
+    pid = int(pidfile.read_text())
+    for _ in range(50):
+        if not _alive(pid):
+            break
+        time.sleep(0.05)
+    assert not _alive(pid)
