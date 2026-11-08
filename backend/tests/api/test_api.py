@@ -163,3 +163,23 @@ def test_admin_password_follows_env_on_restart(env, monkeypatch):
     with TestClient(create_app()) as c:
         assert c.post("/api/auth/login", json={"username": "admin", "password": "pw"}).status_code == 401
         assert c.post("/api/auth/login", json={"username": "admin", "password": "new-pw"}).status_code == 200
+
+
+def test_password_hashes_use_the_stronger_cost_and_old_ones_are_upgraded(env, db):
+    import hashlib
+    import os
+
+    from app.auth import hash_password, outdated, verify_password
+    from app.main import bootstrap
+    from app.models import User
+    salt = os.urandom(16)
+    legacy = salt.hex() + "$" + hashlib.scrypt(b"pw", salt=salt, n=2**14, r=8, p=1).hex()  # the old format and cost
+    assert verify_password("pw", legacy) and not verify_password("nope", legacy) and outdated(legacy)
+    new = hash_password("pw")
+    assert new.startswith("16384:8:5$") and verify_password("pw", new) and not verify_password("nope", new)
+    admin = db.query(User).one()
+    admin.password_hash = legacy
+    db.commit()
+    bootstrap()  # the next start re-hashes it with the current cost
+    db.refresh(admin)
+    assert not outdated(admin.password_hash) and verify_password("pw", admin.password_hash)

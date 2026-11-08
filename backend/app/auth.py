@@ -11,16 +11,23 @@ from .config import get_settings
 from .db import get_db
 from .models import User
 
+# OWASP's minimum scrypt work (equal to N=2^17, p=1), with 16 MiB per hash instead of 128: logins can arrive in parallel
+SCRYPT = "16384:8:5"  # N:r:p
+
 
 def hash_password(pw: str) -> str:
-    salt = os.urandom(16)
-    h = hashlib.scrypt(pw.encode(), salt=salt, n=2**14, r=8, p=1)
-    return salt.hex() + "$" + h.hex()
+    salt, (n, r, p) = os.urandom(16), map(int, SCRYPT.split(":"))
+    return f"{SCRYPT}${salt.hex()}${hashlib.scrypt(pw.encode(), salt=salt, n=n, r=r, p=p).hex()}"
 
 
 def verify_password(pw: str, stored: str) -> bool:
-    salt, h = stored.split("$")
-    return hmac.compare_digest(hashlib.scrypt(pw.encode(), salt=bytes.fromhex(salt), n=2**14, r=8, p=1).hex(), h)
+    params, salt, h = stored.split("$") if stored.count("$") == 2 else ("16384:8:1", *stored.split("$"))  # older: salt$hash
+    n, r, p = map(int, params.split(":"))
+    return hmac.compare_digest(hashlib.scrypt(pw.encode(), salt=bytes.fromhex(salt), n=n, r=r, p=p).hex(), h)
+
+
+def outdated(stored: str) -> bool:
+    return not stored.startswith(SCRYPT + "$")
 
 
 def _sign(data: bytes) -> str:

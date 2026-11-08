@@ -7,7 +7,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from . import logging_setup
 from .agents import seed_agents
 from .api import admin, hub, tasks
-from .auth import hash_password, verify_password
+from .auth import hash_password, outdated, verify_password
 from .config import get_settings
 from .db import Base, engine, session_scope
 from .models import Project, User
@@ -22,7 +22,7 @@ def bootstrap(create_tables: bool = False) -> None:
         admin = db.query(User).filter_by(username=s.admin_username).first()
         if admin is None:
             db.add(User(username=s.admin_username, password_hash=hash_password(s.admin_password)))
-        elif not verify_password(s.admin_password, admin.password_hash):  # .env is the source of truth
+        elif outdated(admin.password_hash) or not verify_password(s.admin_password, admin.password_hash):  # .env rules
             admin.password_hash = hash_password(s.admin_password)
         # Single tenant: the .env admin is the only account, so renaming ADMIN_USERNAME retires the old one (and its tokens)
         db.query(User).filter(User.username != s.admin_username).delete()
