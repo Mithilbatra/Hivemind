@@ -70,20 +70,22 @@ def test_commit_never_runs_hooks_the_agent_can_edit(db, repo, tmp_path):
     hook.parent.mkdir()
     hook.write_text(f"#!/bin/sh\ntouch {marker}\nexit 1\n")
     hook.chmod(0o755)
-    repo_state.commit(db, t, bw, "msg")  # a failing hook would raise here if it ran
+    repo_state.commit(db, t, bw, "msg", repo_state.worktree_tree(bw))  # a failing hook would raise if it ran
     assert not marker.exists()
 
 
 def test_approve_problems_are_409_with_a_reason(db, repo):
     t = submit(db, repo)
     bw = db.query(BranchWorktree).filter_by(task_id=t.id).one()
-    gitdir = Path(sh("git", "rev-parse", "--git-dir", cwd=bw.path).strip())
-    (gitdir if gitdir.is_absolute() else Path(bw.path) / gitdir).joinpath("index.lock").write_text("")
+    ref_lock = Path(repo.path, ".git", "refs", "heads", f"{bw.branch}.lock")  # another git process holds the branch
+    ref_lock.write_text("")
     c = client()
     r = c.post(f"/api/tasks/{t.id}/approval", json={"action": "approve"})
-    assert r.status_code == 409 and "index.lock" in r.json()["detail"]
+    assert r.status_code == 409 and f"{bw.branch}.lock" in r.json()["detail"]
     db.refresh(t)
     assert t.status == states.REVIEW  # nothing half-applied
+    assert db.query(Approval).filter_by(task_id=t.id, status="pending").count() == 1
+    ref_lock.unlink()
     shutil.rmtree(bw.path)
     r = c.post(f"/api/tasks/{t.id}/approval", json={"action": "approve"})
     assert r.status_code == 409 and "checkout is gone" in r.json()["detail"]

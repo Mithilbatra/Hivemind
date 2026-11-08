@@ -26,7 +26,7 @@ export default function TaskPage() {
   // The rest reloads whenever the status changes, and polls only while agents are working.
   const { data: events } = usePoll(() => api<AuditEvent[]>(`/tasks/${id}/events`), tab === "timeline" || live ? 3000 : 0, [id, tab, t?.status]);
   const { data: validation } = usePoll(() => api<Validation[]>(`/tasks/${id}/validation`), live ? 3000 : 0, [id, t?.status]);
-  const { data: diff } = usePoll(() => api<Diff>(`/tasks/${id}/diff`), live ? 3000 : 0, [id, t?.status]);
+  const { data: diff, reload: reloadDiff } = usePoll(() => api<Diff>(`/tasks/${id}/diff`), live ? 3000 : 0, [id, t?.status]);
   const { data: sessions } = usePoll(() => (tab === "agents" ? api<Session[]>(`/sessions?task_id=${id}`) : Promise.resolve(null)),
     tab === "agents" && live ? 3000 : 0, [id, tab, t?.status]);
   const { data: agents } = usePoll(() => api<AgentDef[]>("/agents"), 0);
@@ -63,7 +63,8 @@ export default function TaskPage() {
       {conflicts.length > 0 && !needsDecision && (
         <div className="banner warn">Overlapping edits with {conflicts.map((c) => `task #${c.task_id} (${c.files.join(", ")})`).join("; ")}. Expect a merge conflict.</div>
       )}
-      {needsDecision && <ApprovalPanel task={t} validation={validation ?? []} filesChanged={diff?.files.length ?? 0} onDone={reload} />}
+      {needsDecision && <ApprovalPanel task={t} validation={validation ?? []} filesChanged={diff?.files.length ?? 0} diffId={diff?.id}
+        onDone={() => { reload(); reloadDiff(); }} />}
       <Tabs tabs={[...TABS]} value={tab} onChange={setTab} />
       {tab === "overview" && (
         <>

@@ -9,7 +9,16 @@ import pytest
 from app import states
 from app.agents import get_agent
 from app.config import get_settings
-from app.models import AgentSession, Prompt, RepoContext, Task, ValidationResult
+from app.models import (
+    AgentSession,
+    Approval,
+    BranchWorktree,
+    Diff,
+    Prompt,
+    RepoContext,
+    Task,
+    ValidationResult,
+)
 from app.services import context, planner, repo_state, review, validation
 from app.services import runner as runner_mod
 from app.services.runner import MockRunner, RunResult, default_mock
@@ -190,3 +199,41 @@ def test_runner_cancelled_plan_is_not_replaced_by_template(db, repo):
     runner_mod.set_runner(MockRunner(handler))
     t = submit(db, repo)
     assert t.status == states.CANCELLED and db.query(Task).filter_by(parent_id=t.id).count() == 0
+
+
+def test_approve_commits_only_the_reviewed_diff(db, repo):
+    """Approval ran `git add -A`, so a file written after the reviewed diff was committed unseen."""
+    t = submit(db, repo)
+    assert t.status == states.REVIEW
+    bw = db.query(BranchWorktree).filter_by(task_id=t.id).one()
+    shown = db.query(Diff).filter_by(task_id=t.id).order_by(Diff.id.desc()).first()
+    Path(bw.path, "unseen.txt").write_text("not in the reviewed diff\n")
+    with pytest.raises(BadRequest, match="changed after the diff you reviewed"):
+        review.decide(db, t, "approve", "me", diff_id=shown.id)
+    db.refresh(t)
+    newest = db.query(Diff).filter_by(task_id=t.id).order_by(Diff.id.desc()).first()
+    assert t.status == states.REVIEW and newest.id != shown.id
+    assert "unseen.txt" in {f["path"] for f in newest.files}  # the refusal shows the reviewer what changed
+    assert db.query(Approval).filter_by(task_id=t.id, status="pending").count() == 1
+    assert repo_state.resolve_ref(repo.path, bw.branch) == bw.base_sha  # nothing was committed
+    with pytest.raises(BadRequest, match="newer diff"):  # a page still showing the old diff
+        review.decide(db, t, "approve", "me", diff_id=shown.id)
+    review.decide(db, t, "approve", "me", diff_id=newest.id)
+    assert t.status == states.COMPLETED
+    assert repo_state.git(repo.path, "rev-parse", f"{bw.branch}^{{tree}}").strip() == newest.tree_sha
+
+
+def test_a_write_after_the_check_stays_out_of_the_commit(db, repo, monkeypatch):
+    t = submit(db, repo)
+    bw = db.query(BranchWorktree).filter_by(task_id=t.id).one()
+    checked = repo_state.worktree_tree
+
+    def racing(b):  # something still running in the checkout writes right after the check
+        tree = checked(b)
+        Path(b.path, "late.txt").write_text("written after the check\n")
+        return tree
+    monkeypatch.setattr(repo_state, "worktree_tree", racing)
+    review.decide(db, t, "approve", "me")
+    assert t.status == states.COMPLETED
+    files = repo_state.git(repo.path, "ls-tree", "-r", "--name-only", bw.branch).split()
+    assert "mock_feature.py" in files and "late.txt" not in files

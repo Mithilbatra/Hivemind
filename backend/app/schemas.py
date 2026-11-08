@@ -42,6 +42,7 @@ class ApprovalIn(BaseModel):
     action: str
     reason: str = ""
     confirm: bool = False
+    diff_id: int | None = None  # the diff the reviewer looked at; a newer one means they have not seen it
 
 
 class RepoIn(BaseModel):

@@ -29,7 +29,7 @@ export type Validation = {
   exit_code: number | null; duration_s: number; output_tail: string;
 };
 export type Diff = {
-  patch: string; files: { path: string; additions: number; deletions: number }[]; additions: number;
+  id: number; patch: string; files: { path: string; additions: number; deletions: number }[]; additions: number;
   deletions: number; truncated: boolean;
 } | null;
 export type AuditEvent = { id: number; task_id: number | null; actor: string; type: string; message: string; ts: string; payload: Record<string, unknown> };

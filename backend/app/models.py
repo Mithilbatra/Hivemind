@@ -176,6 +176,7 @@ class Diff(Base):
     additions: Mapped[int] = mapped_column(Integer, default=0)
     deletions: Mapped[int] = mapped_column(Integer, default=0)
     truncated: Mapped[bool] = mapped_column(Boolean, default=False)
+    tree_sha: Mapped[str | None] = mapped_column(String(64))  # the exact tree this diff shows
     created_at: Mapped[datetime] = _ts()
 
 

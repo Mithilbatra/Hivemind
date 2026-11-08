@@ -190,7 +190,7 @@ def approval(task_id: int, body: ApprovalIn, db=Depends(get_db), user=Depends(cu
     t = _task(db, task_id)
     try:
         with _exclusive(db, t):
-            requeue = review.decide(db, t, body.action, user.username, body.reason, body.confirm)
+            requeue = review.decide(db, t, body.action, user.username, body.reason, body.confirm, body.diff_id)
     except (svc.BadRequest, InvalidTransition, repo_state.GitError) as e:  # e.g. a locked index: say why, not "500"
         raise HTTPException(409, str(e))
     if requeue:

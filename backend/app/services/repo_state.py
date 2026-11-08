@@ -3,6 +3,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import tempfile
 import uuid
 from functools import cache
 from pathlib import Path
@@ -31,7 +32,7 @@ def _excludes(data_dir: Path) -> str:
     return str(f.resolve())
 
 
-def git(cwd, *args: str, check: bool = True) -> str:
+def git(cwd, *args: str, check: bool = True, env: dict | None = None) -> str:
     s = get_settings()
     # Hooks off: a relative core.hooksPath (husky) would run hook files the agent can edit in the worktree.
     # quotePath off: non-ASCII file names come back as real paths, not "caf\303\251.txt".
@@ -39,7 +40,7 @@ def git(cwd, *args: str, check: bool = True) -> str:
            "-c", f"user.email={s.git_author_email}", "-c", f"core.hooksPath={os.devnull}", "-c", "core.quotePath=false",
            *args]
     # errors="replace": a Latin-1 file in a diff must not crash the session
-    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, errors="replace", timeout=120, env=safety.child_env())
+    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, errors="replace", timeout=120, env=safety.child_env(env))
     if check and r.returncode != 0:
         raise GitError(f"git {' '.join(args)} failed: {r.stderr.strip() or r.stdout.strip()}")
     return r.stdout
@@ -110,18 +111,33 @@ def changed_between(before: dict[str, str], after: dict[str, str]) -> list[str]:
     return sorted(p for p in set(before) | set(after) if before.get(p) != after.get(p))
 
 
+def worktree_tree(bw: BranchWorktree) -> str:
+    """Tree id of the checkout as a commit would record it. Staged in a scratch copy of the index, so the real
+    index (the one an agent's `git status` reads) is left alone."""
+    index = Path(bw.path) / git(bw.path, "rev-parse", "--git-path", "index").strip()
+    with tempfile.TemporaryDirectory() as d:
+        env = {"GIT_INDEX_FILE": str(Path(d) / "index")}
+        if index.exists():
+            shutil.copyfile(index, env["GIT_INDEX_FILE"])  # keeps git's stat cache, so files are not all re-hashed
+        else:
+            git(bw.path, "read-tree", "HEAD", env=env)
+        git(bw.path, "add", "-A", env=env)
+        return git(bw.path, "write-tree", env=env).strip()
+
+
 def capture_diff(db, task, bw: BranchWorktree, session_id: int | None = None) -> Diff:
     """Store the cumulative diff of the worktree against its base, and update touched files."""
-    git(bw.path, "add", "-N", ".")  # intent-to-add so untracked files appear in the diff
+    git(bw.path, "add", "-N", ".")  # intent-to-add: an agent's own `git diff` shows its new files too
+    tree = worktree_tree(bw)  # the diff shows exactly this tree, and approval commits exactly this tree
     # --no-renames: a rename shows as delete + add, so every path is a real file path (numstat, conflicts, UI)
-    patch = git(bw.path, "diff", "--no-renames", bw.base_sha)
-    numstat = git(bw.path, "diff", "--no-renames", "--numstat", bw.base_sha)
+    patch = git(bw.path, "diff", "--no-renames", bw.base_sha, tree)
+    numstat = git(bw.path, "diff", "--no-renames", "--numstat", bw.base_sha, tree)
     files = []
     for line in numstat.splitlines():
         a, d, name = line.split("\t", 2)
         files.append({"path": name, "additions": int(a) if a.isdigit() else 0, "deletions": int(d) if d.isdigit() else 0})
     cap = get_settings().max_diff_chars
-    d = Diff(task_id=task.id, session_id=session_id, patch=patch[:cap], files=files, truncated=len(patch) > cap,
+    d = Diff(task_id=task.id, session_id=session_id, patch=patch[:cap], files=files, truncated=len(patch) > cap, tree_sha=tree,
              additions=sum(f["additions"] for f in files), deletions=sum(f["deletions"] for f in files))
     db.add(d)
     bw.touched_files = [f["path"] for f in files]
@@ -154,12 +170,14 @@ def detect_conflicts(db, task, bw: BranchWorktree) -> list[dict]:
     return found
 
 
-def commit(db, task, bw: BranchWorktree, message: str) -> str:
-    git(bw.path, "add", "-A")
-    if not git(bw.path, "status", "--porcelain").strip():
+def commit(db, task, bw: BranchWorktree, message: str, tree: str) -> str:
+    """Commit exactly `tree` (what the reviewer saw): a file written after the check cannot slip in."""
+    head = head_sha(bw.path)
+    if tree == git(bw.path, "rev-parse", f"{head}^{{tree}}").strip():
         emit(db, task.id, "commit_skipped", "nothing to commit")
     else:
-        git(bw.path, "commit", "-m", message)
+        sha = git(bw.path, "commit-tree", tree, "-p", head, "-m", message).strip()
+        git(bw.path, "update-ref", "-m", f"commit: {message.splitlines()[0]}", "HEAD", sha, head)
     bw.commit_sha = head_sha(bw.path)
     emit(db, task.id, "committed", f"{bw.branch} @ {bw.commit_sha[:8]}", {"sha": bw.commit_sha})
     db.commit()

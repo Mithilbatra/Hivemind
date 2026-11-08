@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .. import states
-from ..models import Approval, BranchWorktree, Repository, Task
+from ..models import Approval, BranchWorktree, Diff, Repository, Task
 from ..states import transition
 from . import orchestrator, repo_state
 from .audit import emit
@@ -20,7 +20,8 @@ def _decide(a: Approval, status: str, user: str, reason: str):
     a.status, a.decided_by, a.reason, a.decided_at = status, user, reason, datetime.now(UTC)
 
 
-def decide(db, task: Task, action: str, user: str, reason: str = "", confirm: bool = False) -> bool:
+def decide(db, task: Task, action: str, user: str, reason: str = "", confirm: bool = False,
+           diff_id: int | None = None) -> bool:
     """Apply a decision. Returns True if the task should be handed back to a worker."""
     if action not in ACTIONS:
         raise BadRequest(f"action must be one of {ACTIONS}")
@@ -44,11 +45,12 @@ def decide(db, task: Task, action: str, user: str, reason: str = "", confirm: bo
         if not (confirm and reason.strip()):
             raise BadRequest("force_commit needs confirm=true and a reason")
         bw = _worktree(db, task)
+        tree = _reviewed_tree(db, task, bw, diff_id)
         a = _pending(db, task, "pre_commit") or Approval(task_id=task.id, kind="pre_commit")
         db.add(a)
         _decide(a, "forced", user, reason)
         emit(db, task.id, "force_commit", reason, {"validation_bypassed": task.status == states.FAILED}, actor)
-        _finish(db, task, bw, actor)
+        _finish(db, task, bw, actor, tree)
         return False
     if task.status != states.REVIEW:
         raise BadRequest(f"task is {task.status}, not waiting_for_review")
@@ -57,9 +59,10 @@ def decide(db, task: Task, action: str, user: str, reason: str = "", confirm: bo
         raise BadRequest("no pending approval")
     if action == "approve":
         bw = _worktree(db, task)
+        tree = _reviewed_tree(db, task, bw, diff_id)
         _decide(a, "approved", user, reason)
         emit(db, task.id, "approval_decision", "approved", {"reason": reason}, actor)
-        _finish(db, task, bw, actor)
+        _finish(db, task, bw, actor, tree)
         return False
     if action == "reject":
         _decide(a, "rejected", user, reason)
@@ -82,8 +85,23 @@ def _worktree(db, task) -> BranchWorktree:
     return bw
 
 
-def _finish(db, task, bw, actor):
-    repo_state.commit(db, task, bw, f"{task.title}\n\nTask #{task.id} (Hivemind branch {bw.branch})")
+def _reviewed_tree(db, task, bw, diff_id: int | None) -> str:
+    """The checkout's tree, if it is exactly what the latest diff shows. Otherwise refresh the diff and refuse:
+    approving must never commit a file the reviewer has not seen."""
+    shown = db.query(Diff).filter_by(task_id=task.id).order_by(Diff.id.desc()).first()
+    if diff_id is not None and (shown is None or shown.id != diff_id):
+        raise BadRequest("there is a newer diff than the one you reviewed: review it and decide again")
+    tree = repo_state.worktree_tree(bw)
+    if tree != (shown.tree_sha if shown else repo_state.git(bw.path, "rev-parse", f"{bw.base_sha}^{{tree}}").strip()):
+        emit(db, task.id, "review_stale", "the checkout changed after the reviewed diff; nothing was committed")
+        repo_state.capture_diff(db, task, bw)
+        raise BadRequest("The checkout changed after the diff you reviewed, so nothing was committed. "
+                         "The diff now shows the current state: review it and decide again.")
+    return tree
+
+
+def _finish(db, task, bw, actor, tree):
+    repo_state.commit(db, task, bw, f"{task.title}\n\nTask #{task.id} (Hivemind branch {bw.branch})", tree)
     repo_state.release_worktree(db, bw, db.get(Repository, task.repo_id), delete_branch=False)
     task.error, task.dead_letter = None, False  # a force-committed task is done, not dead
     transition(db, task, states.COMPLETED, "committed after approval", actor)

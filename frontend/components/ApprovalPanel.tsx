@@ -3,7 +3,7 @@ import { useState } from "react";
 import { api, TaskDetail, Validation } from "@/lib/api";
 import { RiskBadge } from "./ui";
 
-export default function ApprovalPanel({ task, validation, filesChanged, onDone }: { task: TaskDetail; validation: Validation[]; filesChanged: number; onDone: () => void }) {
+export default function ApprovalPanel({ task, validation, filesChanged, diffId, onDone }: { task: TaskDetail; validation: Validation[]; filesChanged: number; diffId?: number; onDone: () => void }) {
   const [reason, setReason] = useState("");
   const [confirm, setConfirm] = useState(false);
   const [err, setErr] = useState("");
@@ -16,8 +16,9 @@ export default function ApprovalPanel({ task, validation, filesChanged, onDone }
 
   async function act(action: string) {
     setBusy(true); setErr("");
-    try { await api(`/tasks/${task.id}/approval`, { method: "POST", json: { action, reason, confirm } }); setReason(""); setConfirm(false); onDone(); }
-    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    // diff_id: the server refuses to commit if the diff on screen is no longer the latest
+    try { await api(`/tasks/${task.id}/approval`, { method: "POST", json: { action, reason, confirm, diff_id: diffId } }); setReason(""); setConfirm(false); onDone(); }
+    catch (e) { setErr((e as Error).message); onDone(); } finally { setBusy(false); }  // reload: a refusal may come with a new diff
   }
 
   return (
