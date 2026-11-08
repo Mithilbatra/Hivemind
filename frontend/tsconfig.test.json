@@ -10,5 +10,5 @@
     "outDir": ".test-build",
     "rootDir": "."
   },
-  "include": ["lib/parse.ts", "tests/*.test.ts"]
+  "include": ["lib/parse.ts", "proxy.ts", "tests/*.test.ts"]
 }
