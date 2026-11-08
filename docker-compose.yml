@@ -63,7 +63,7 @@ services:
       ADMIN_PASSWORD: ""
       POSTGRES_PASSWORD: ""
       REDIS_PASSWORD: ""
-    # No shell and no URL on the command line: rq runs inside the python process, which gets SIGTERM directly
+    # No shell and no URL on the command line. PID 1 is a tiny init: it reaps orphaned processes and passes SIGTERM to rq
     command: ["python", "-m", "app.worker", "-n", "${WORKER_CONCURRENCY:-4}"]
     depends_on:
       api: { condition: service_healthy }
