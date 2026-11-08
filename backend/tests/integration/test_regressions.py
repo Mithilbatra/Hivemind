@@ -262,3 +262,25 @@ def test_check_output_survives_a_leftover_process_which_is_then_killed(tmp_path)
             break
         time.sleep(0.05)
     assert not _alive(pid)
+
+
+def test_a_worker_that_lost_its_lock_stops_writing(db, repo):
+    """A worker frozen past the lock TTL (a sleeping laptop pauses Docker) woke up and kept writing over the worker
+    that had taken the task over: it moved the task to review, and the other worker's next step dead-lettered it."""
+    t = create_tasks(db, title="Add feature", repo_ids=[repo.id])[0]
+    conn, key = queue.get_redis(), queue.lock_key(t.id)
+
+    def taken_over(req):
+        if req.role == "writer":
+            conn.set(key, "another-worker")  # the lock lapsed while this worker was frozen; another one took it
+        return default_mock(req)
+    runner_mod.set_runner(MockRunner(taken_over))
+    queue.enqueue_task(t.id)  # stops at its first write after the takeover; the fresh job finds the task busy
+    db.refresh(t)
+    writer = db.query(AgentSession).filter_by(top_task_id=t.id, agent_role="writer").one()
+    assert (t.status, writer.status) == (states.RUNNING, "running")  # nothing written after the loss
+    conn.delete(key)  # the other worker is done with it
+    runner_mod.set_runner(MockRunner(default_mock))
+    queue.enqueue_task(t.id)
+    db.refresh(t)
+    assert t.status == states.REVIEW  # and the task resumes from what was saved

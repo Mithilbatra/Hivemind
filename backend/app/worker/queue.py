@@ -19,6 +19,10 @@ class TaskBusy(RuntimeError):
     pass
 
 
+class LockLost(RuntimeError):
+    """The lock lapsed or passed to another worker while this one ran (it froze, e.g. a sleeping laptop pauses Docker)."""
+
+
 def get_redis():
     global _conn
     if _conn is None:
@@ -42,26 +46,29 @@ def lock_key(task_id: int) -> str:
 
 @contextmanager
 def task_lock(task_id: int):
-    """Exclusive right to change a task, shared by workers and API calls. Raises TaskBusy if someone holds it."""
+    """Exclusive right to change a task, shared by workers and API calls. Raises TaskBusy if someone holds it.
+    Yields check(), which raises LockLost once the lock is no longer this holder's."""
     conn, key, token = get_redis(), lock_key(task_id), uuid.uuid4().hex
     if not conn.set(key, token, nx=True, ex=LOCK_TTL_S):
         raise TaskBusy(f"task {task_id} is being processed")
     stop = threading.Event()
 
+    def check():
+        if conn.get(key) != token.encode():
+            raise LockLost(f"task {task_id}: the lock lapsed or passed to another worker")
+
     def heartbeat():
         while not stop.wait(LOCK_TTL_S / 3):
             try:
-                held = conn.get(key)
-                if held == token.encode():
-                    conn.expire(key, LOCK_TTL_S)
-                elif held is not None or not conn.set(key, token, nx=True, ex=LOCK_TTL_S):
-                    return  # someone else holds it now; never steal
-            except Exception:  # a Redis blip must not end the refresher (the lock would silently lapse)
+                if conn.get(key) != token.encode():
+                    return  # lapsed or taken over: never take it back, another worker may have run the task since
+                conn.expire(key, LOCK_TTL_S)
+            except Exception:  # a Redis blip must not end the refresher (the lock would lapse for nothing)
                 continue
 
     threading.Thread(target=heartbeat, daemon=True).start()
     try:
-        yield
+        yield check
     finally:
         stop.set()
         # shortcut: get-then-delete is not atomic; harmless while the heartbeat keeps the TTL far from expiry.
