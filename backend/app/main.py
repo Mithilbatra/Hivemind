@@ -24,6 +24,8 @@ def bootstrap(create_tables: bool = False) -> None:
             db.add(User(username=s.admin_username, password_hash=hash_password(s.admin_password)))
         elif not verify_password(s.admin_password, admin.password_hash):  # .env is the source of truth
             admin.password_hash = hash_password(s.admin_password)
+        # Single tenant: the .env admin is the only account, so renaming ADMIN_USERNAME retires the old one (and its tokens)
+        db.query(User).filter(User.username != s.admin_username).delete()
         if not db.query(Project).first():
             db.add(Project(name="default", max_retries=s.max_retries))
         db.commit()

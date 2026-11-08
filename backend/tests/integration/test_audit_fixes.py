@@ -332,3 +332,14 @@ def test_pre_run_reject_leaves_nothing_behind(db, repo):
     assert t.status == states.CANCELLED
     assert db.query(Approval).filter_by(task_id=t.id, status="rejected").count() == 1
     assert db.query(Task).filter_by(parent_id=t.id).count() == 0
+
+
+def test_renaming_the_admin_retires_the_old_account(db, monkeypatch):
+    with TestClient(create_app()) as c:
+        old_token = c.post("/api/auth/login", json={"username": "admin", "password": "pw"}).json()["token"]
+    monkeypatch.setenv("ADMIN_USERNAME", "root")
+    get_settings.cache_clear()
+    with TestClient(create_app()) as c:  # a restart with the new .env
+        assert c.post("/api/auth/login", json={"username": "admin", "password": "pw"}).status_code == 401
+        assert c.get("/api/tasks", headers={"Authorization": f"Bearer {old_token}"}).status_code == 401
+        assert c.post("/api/auth/login", json={"username": "root", "password": "pw"}).status_code == 200
