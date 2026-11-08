@@ -98,9 +98,9 @@ def enqueue_task(task_id: int) -> None:
             mark_dead(task_id, str(e))
             raise
         return
-    # No retry interval: delayed retries need an RQ scheduler, and `rq worker-pool` never starts one, so they
-    # sat in the scheduled registry forever. advance() resumes from the last finished step, so retrying at once is fine.
-    get_queue().enqueue(run_task_job, task_id, job_timeout=JOB_TIMEOUT_S, retry=Retry(max=2),
+    # Spaced retries (the pool runs RQ's scheduler, which re-queues them): retrying at once burned both attempts
+    # during a short outage, such as Postgres restarting. advance() resumes from the last finished step.
+    get_queue().enqueue(run_task_job, task_id, job_timeout=JOB_TIMEOUT_S, retry=Retry(max=2, interval=[10, 60]),
                         on_failure=_on_failure, failure_ttl=7 * 86400, result_ttl=3600)
 
 

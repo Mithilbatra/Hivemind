@@ -35,13 +35,15 @@ def submit(db, repo, **kw):
     return t
 
 
-def test_retries_do_not_need_a_scheduler(db, repo, monkeypatch):
+def test_a_crashed_job_is_retried_after_a_pause_not_at_once(db, repo, monkeypatch):
+    """Retries at once burned both attempts during a short outage (Postgres restarting); the pool runs RQ's
+    scheduler (checked live: a failing job came back after its interval), so a retry can wait."""
     monkeypatch.setenv("QUEUE_INLINE", "false")
     get_settings.cache_clear()
     t = create_tasks(db, title="x", repo_ids=[repo.id])[0]
     queue.enqueue_task(t.id)
     [job] = queue.get_queue().jobs
-    assert job.retries_left == 2 and not any(job.retry_intervals or [])  # a delay would wait for a scheduler
+    assert (job.retries_left, job.retry_intervals) == (2, [10, 60])
 
 
 def test_rq_failure_callback_waits_for_last_retry(db, repo):
