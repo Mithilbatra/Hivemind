@@ -216,3 +216,14 @@ def test_a_failed_tasks_checkout_can_be_discarded_and_the_task_retried(db, repo)
     assert t["id"] not in [x["id"] for x in c.get("/api/dead-letter").json()]
     runner_mod.set_runner(MockRunner(default_mock))
     assert c.post(f"/api/tasks/{t['id']}/retry").json()["status"] == "waiting_for_review"
+
+
+def test_cancelling_closes_a_pending_approval(db, repo):
+    """A cancelled task kept its pre-run approval 'pending', so it still looked like it was waiting for a decision."""
+    c = client()
+    t = c.post("/api/tasks", json={"title": "Rotate the keys", "repo_ids": [repo.id], "risk_level": "high"}).json()[0]
+    assert [a["status"] for a in c.get(f"/api/tasks/{t['id']}").json()["approvals"]] == ["pending"]
+    assert c.post(f"/api/tasks/{t['id']}/cancel").json()["status"] == "cancelled"
+    assert [a["status"] for a in c.get(f"/api/tasks/{t['id']}").json()["approvals"]] == ["cancelled"]
+    assert c.post(f"/api/tasks/{t['id']}/retry").json()["status"] == "blocked"  # a retry asks again
+    assert [a["status"] for a in c.get(f"/api/tasks/{t['id']}").json()["approvals"]] == ["cancelled", "pending"]

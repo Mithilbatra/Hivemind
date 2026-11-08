@@ -97,6 +97,7 @@ def cancel_now(db, top, reason: str, actor: str = "system") -> None:
         if c.status not in states.TERMINAL:
             transition(db, c, states.CANCELLED, reason, actor)
     top.cancel_requested, top.dead_letter = True, False  # a discarded failure no longer needs attention
+    db.query(Approval).filter_by(task_id=top.id, status="pending").update({"status": "cancelled"})  # nothing left to decide
     transition(db, top, states.CANCELLED, reason, actor)
     release(db, top, delete_branch=True)
 

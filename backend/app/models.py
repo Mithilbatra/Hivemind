@@ -196,7 +196,7 @@ class Approval(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), index=True)
     kind: Mapped[str] = mapped_column(String(20))  # pre_run|pre_commit
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|approved|rejected|changes_requested|forced
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|approved|rejected|changes_requested|forced|cancelled
     decided_by: Mapped[str | None] = mapped_column(String(100))
     reason: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = _ts()
